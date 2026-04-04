@@ -1,0 +1,10 @@
+config:
+  jetstream:
+    enabled: true
+    memStorage:
+      enabled: true
+      size: 256Mi
+    fileStorage:
+      enabled: true
+      size: 1Gi
+      storageDirectory: /data/jetstream

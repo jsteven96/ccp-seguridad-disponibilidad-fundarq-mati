@@ -1,0 +1,139 @@
+# MongoDB Replica Set — sin autenticacion (experimento local)
+# Primary: mongodb-0 | Secondary: mongodb-1
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: mongodb-headless
+  namespace: data
+  labels:
+    app: mongodb
+spec:
+  clusterIP: None
+  selector:
+    app: mongodb
+  ports:
+    - port: 27017
+      targetPort: 27017
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: mongodb
+  namespace: data
+  labels:
+    app: mongodb
+spec:
+  selector:
+    app: mongodb
+  ports:
+    - port: 27017
+      targetPort: 27017
+      nodePort: 30017
+  type: NodePort
+---
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: mongodb
+  namespace: data
+spec:
+  serviceName: mongodb-headless
+  replicas: 2
+  selector:
+    matchLabels:
+      app: mongodb
+  template:
+    metadata:
+      labels:
+        app: mongodb
+    spec:
+      containers:
+        - name: mongodb
+          image: mongo:7.0
+          args:
+            - --replSet=rs0
+            - --bind_ip_all
+          ports:
+            - containerPort: 27017
+          volumeMounts:
+            - name: datadir
+              mountPath: /data/db
+          resources:
+            requests:
+              cpu: 100m
+              memory: 256Mi
+            limits:
+              cpu: 500m
+              memory: 512Mi
+          readinessProbe:
+            exec:
+              command:
+                - mongosh
+                - --eval
+                - "db.adminCommand('ping')"
+                - --quiet
+            initialDelaySeconds: 15
+            periodSeconds: 5
+            timeoutSeconds: 5
+  volumeClaimTemplates:
+    - metadata:
+        name: datadir
+      spec:
+        accessModes: ["ReadWriteOnce"]
+        resources:
+          requests:
+            storage: 500Mi
+---
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: mongodb-rs-init
+  namespace: data
+spec:
+  backoffLimit: 20
+  template:
+    spec:
+      restartPolicy: OnFailure
+      containers:
+        - name: rs-init
+          image: mongo:7.0
+          command:
+            - bash
+            - -c
+            - |
+              HOST0="mongodb-0.mongodb-headless.data.svc.cluster.local:27017"
+              HOST1="mongodb-1.mongodb-headless.data.svc.cluster.local:27017"
+              echo "Esperando a mongodb-0..."
+              until mongosh "mongodb://${HOST0}/admin" --eval "db.adminCommand('ping')" --quiet 2>/dev/null; do
+                sleep 3; echo "...ping"
+              done
+              echo "mongodb-0 listo."
+              mongosh "mongodb://${HOST0}/admin" --quiet --eval "
+                try {
+                  rs.status();
+                  print('RS ya existe');
+                } catch(e) {
+                  rs.initiate({
+                    _id: 'rs0',
+                    members: [
+                      { _id: 0, host: '${HOST0}', priority: 2 },
+                      { _id: 1, host: '${HOST1}', priority: 1 }
+                    ]
+                  });
+                  print('RS iniciado');
+                }
+              "
+              sleep 20
+              mongosh "mongodb://${HOST0}/ccp" --quiet --eval "
+                db.inventario.drop();
+                db.inventario.insertMany([
+                  { SKU: 'COCA-COLA-350', stock: 9,   stock_inicial: 9,   reservas_activas: [], version: 0 },
+                  { SKU: 'AGUA-500',      stock: 100, stock_inicial: 100, reservas_activas: [], version: 0 },
+                  { SKU: 'ARROZ-1KG',     stock: 50,  stock_inicial: 50,  reservas_activas: [], version: 0 }
+                ]);
+                db.createCollection('actor_stats');
+                db.createCollection('auditoria');
+                print('CCP BD lista: ' + db.inventario.countDocuments() + ' SKUs');
+              "
+              echo "MongoDB RS listo!"

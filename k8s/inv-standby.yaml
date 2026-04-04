@@ -1,0 +1,74 @@
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: modulo-inventarios-standby
+  namespace: ccp
+  labels:
+    app: modulo-inventarios
+    role: standby
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: modulo-inventarios
+      role: standby
+  template:
+    metadata:
+      labels:
+        app: modulo-inventarios
+        role: standby
+    spec:
+      nodeSelector:
+        role: standby
+      containers:
+        - name: modulo-inventarios-standby
+          image: ccp/modulo-inventarios:latest
+          imagePullPolicy: Never
+          command: ["uvicorn", "main:app", "--host", "0.0.0.0", "--port", "8095"]
+          ports:
+            - containerPort: 8095
+          env:
+            - name: MONGODB_URL
+              value: "mongodb://mongodb-1.mongodb-headless.data.svc.cluster.local:27017/ccp?replicaSet=rs0&directConnection=true"
+            - name: NATS_URL
+              value: "nats://nats.messaging.svc.cluster.local:4222"
+            - name: HEARTBEAT_INTERVAL_S
+              value: "5"
+            - name: STANDBY_MODE
+              value: "true"
+            - name: NODE_ID
+              value: "inv-standby"
+            - name: SERVICE_NAME
+              value: "modulo-inventarios-standby"
+          readinessProbe:
+            httpGet:
+              path: /health
+              port: 8095
+            initialDelaySeconds: 5
+            periodSeconds: 5
+          livenessProbe:
+            httpGet:
+              path: /health
+              port: 8095
+            initialDelaySeconds: 15
+            periodSeconds: 10
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: modulo-inventarios-standby
+  namespace: ccp
+  labels:
+    app: modulo-inventarios
+    role: standby
+spec:
+  type: NodePort
+  selector:
+    app: modulo-inventarios
+    role: standby
+  ports:
+    - name: http
+      port: 8095
+      targetPort: 8095
+      nodePort: 30095

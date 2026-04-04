@@ -1,0 +1,58 @@
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: modulo-seguridad
+  namespace: ccp
+  labels:
+    app: modulo-seguridad
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: modulo-seguridad
+  template:
+    metadata:
+      labels:
+        app: modulo-seguridad
+    spec:
+      containers:
+        - name: modulo-seguridad
+          image: ccp/modulo-seguridad:latest
+          imagePullPolicy: Never
+          ports:
+            - containerPort: 8093
+          env:
+            - name: NATS_URL
+              value: "nats://nats.messaging.svc.cluster.local:4222"
+            - name: LOG_AUDITORIA_URL
+              value: "http://log-auditoria.ccp.svc.cluster.local:8096"
+            - name: BLOCK_DURATION_HOURS
+              value: "24"
+          readinessProbe:
+            httpGet:
+              path: /health
+              port: 8093
+            initialDelaySeconds: 5
+            periodSeconds: 5
+          livenessProbe:
+            httpGet:
+              path: /health
+              port: 8093
+            initialDelaySeconds: 15
+            periodSeconds: 10
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: modulo-seguridad
+  namespace: ccp
+spec:
+  type: NodePort
+  selector:
+    app: modulo-seguridad
+  ports:
+    - name: http
+      port: 8093
+      targetPort: 8093
+      nodePort: 30093

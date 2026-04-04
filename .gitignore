@@ -1,0 +1,21 @@
+# Python
+__pycache__/
+*.py[cod]
+*.pyo
+.env
+
+# macOS
+.DS_Store
+
+# Claude Code internal
+.claude/
+
+# Docker build cache
+.dockerignore
+
+# Kubernetes secrets / local overrides
+*.local.yaml
+
+# Resultados de experimentos anteriores (opcional — comentar para conservarlos)
+# experiments/*/results_*.json
+# scripts/final_report.json

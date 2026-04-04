@@ -1,0 +1,55 @@
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: mongodb-rs-init
+  namespace: data
+spec:
+  backoffLimit: 15
+  template:
+    spec:
+      restartPolicy: OnFailure
+      containers:
+        - name: rs-init
+          image: mongo:7.0
+          command:
+            - bash
+            - -c
+            - |
+              set -e
+              HOST="mongodb-0.mongodb-headless.data.svc.cluster.local:27017"
+              URI="mongodb://root:ccp-experiment-2024@${HOST}/admin"
+              echo "Esperando a mongodb-0..."
+              until mongosh "$URI" --eval "db.adminCommand('ping')" --quiet 2>/dev/null; do
+                sleep 5; echo "Reintentando..."
+              done
+              echo "mongodb-0 listo. Iniciando replica set..."
+              mongosh "$URI" --quiet --eval "
+                try {
+                  var s = rs.status();
+                  print('Replica set ya existe: ' + s.set);
+                } catch(e) {
+                  rs.initiate({
+                    _id: 'rs0',
+                    members: [
+                      { _id: 0, host: 'mongodb-0.mongodb-headless.data.svc.cluster.local:27017', priority: 2 },
+                      { _id: 1, host: 'mongodb-1.mongodb-headless.data.svc.cluster.local:27017', priority: 1 }
+                    ]
+                  });
+                  print('Replica set iniciado.');
+                }
+              "
+              echo "Esperando eleccion primary (25s)..."
+              sleep 25
+              echo "Inicializando BD CCP..."
+              mongosh "mongodb://root:ccp-experiment-2024@${HOST}/ccp?authSource=admin" --quiet --eval "
+                db.inventario.drop();
+                db.inventario.insertMany([
+                  { SKU: 'COCA-COLA-350', stock: 9,   stock_inicial: 9,   reservas_activas: [], version: 0 },
+                  { SKU: 'AGUA-500',      stock: 100, stock_inicial: 100, reservas_activas: [], version: 0 },
+                  { SKU: 'ARROZ-1KG',     stock: 50,  stock_inicial: 50,  reservas_activas: [], version: 0 }
+                ]);
+                db.createCollection('actor_stats');
+                db.createCollection('auditoria');
+                print('BD CCP lista: ' + db.inventario.countDocuments() + ' SKUs cargados.');
+              "
+              echo "MongoDB Replica Set listo!"

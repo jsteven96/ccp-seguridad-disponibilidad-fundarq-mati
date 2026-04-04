@@ -1,0 +1,16 @@
+# Service alias "inv-standby" para que el Corrector pueda activar el standby
+apiVersion: v1
+kind: Service
+metadata:
+  name: inv-standby
+  namespace: ccp
+spec:
+  type: NodePort
+  selector:
+    app: modulo-inventarios
+    role: standby
+  ports:
+    - name: http
+      port: 8095
+      targetPort: 8095
+      nodePort: 30097

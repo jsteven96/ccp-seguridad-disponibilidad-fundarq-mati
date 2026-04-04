@@ -1,0 +1,16 @@
+architecture: replicaset
+replicaCount: 2
+arbiter:
+  enabled: false
+auth:
+  rootPassword: "ccp-experiment-2024"
+  replicaSetKey: "ccp-rs-key"
+persistence:
+  size: 500Mi
+resources:
+  requests:
+    cpu: 100m
+    memory: 256Mi
+  limits:
+    cpu: 500m
+    memory: 512Mi

@@ -7,8 +7,10 @@ __pycache__/
 # macOS
 .DS_Store
 
-# Claude Code internal
-.claude/
+# Claude Code internal (settings y memoria privada)
+.claude/settings.local.json
+.claude/agent-memory/
+.claude/memory/
 
 # Docker build cache
 .dockerignore

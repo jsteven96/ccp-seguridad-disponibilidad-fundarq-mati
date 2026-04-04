@@ -1,31 +1,151 @@
-# Spec: Fase 6 — Despliegue en Oracle Cloud Infrastructure (OKE)
+# Spec: Fase 6 — Despliegue Multi-entorno (Local Kind + OCI OKE)
 
 ## Objetivo
 
-Migrar el experimento CCP completo — que actualmente funciona en un cluster Kind local con
-9/9 casos de prueba pasados — a un cluster OKE (Oracle Kubernetes Engine) en produccion real
-sobre OCI. El objetivo es demostrar que los ASRs de Disponibilidad y Seguridad se cumplen
-en infraestructura cloud real, no solo en simulacion local.
+Proveer dos modos de despliegue intercambiables para el experimento CCP: **local con Kind**
+(ya validado con 9/9 casos) y **cloud con OKE** (Oracle Kubernetes Engine) en OCI. Ambos
+modos ejecutan los mismos 9 casos de prueba sin modificar microservicios ni scripts de
+experimento. El objetivo es demostrar que los ASRs de Disponibilidad y Seguridad se cumplen
+tanto en simulacion local como en infraestructura cloud real.
+
+## Modos de Despliegue
+
+La variable `DEPLOY_TARGET` controla que entorno se usa. Por defecto es `local`.
+
+| Aspecto | `DEPLOY_TARGET=local` | `DEPLOY_TARGET=oci` |
+|---|---|---|
+| Cluster | Kind (Docker, 3 nodos) | OKE (OCI, 3 workers VM.Standard.E4.Flex) |
+| Registro de imagenes | `kind load docker-image` (local) | OCIR (`<region>.ocir.io`) |
+| Prerequisitos | Docker, Kind, kubectl, Helm | Docker, OCI CLI, kubectl, Helm + 5 variables OCI |
+| Credenciales cloud | Ninguna | `OCI_REGION`, `OCI_TENANCY_NAMESPACE`, `OCI_COMPARTMENT_ID`, `OCIR_USERNAME`, `OCIR_PASSWORD` |
+| Comando de entrada | `DEPLOY_TARGET=local bash infra/deploy.sh` | `DEPLOY_TARGET=oci bash infra/deploy.sh` |
+| Service type | NodePort (30090-30096) | LoadBalancer (IPs publicas) |
+| Storage | emptyDir / PVC local Kind | StorageClass `oci-bv` (OCI Block Volume) |
+| Acceso a servicios | `kubectl port-forward` (macOS + Kind) | `kubectl port-forward` (compatible con ambos) |
+| Cuando usarlo | Desarrollo, iteracion rapida, validacion inicial | Validacion en cloud real, demostracion academica |
+
+### Script orquestador unificado: `infra/deploy.sh`
+
+Este archivo debe crearse como parte de la ejecucion de esta spec:
+
+```bash
+#!/bin/bash
+# infra/deploy.sh — Orquestador unificado: selecciona modo segun DEPLOY_TARGET
+# Uso: DEPLOY_TARGET=local bash infra/deploy.sh
+#      DEPLOY_TARGET=oci bash infra/deploy.sh
+
+set -euo pipefail
+
+DEPLOY_TARGET="${DEPLOY_TARGET:-local}"
+
+echo "============================================================"
+echo " CCP — Deploy (modo: ${DEPLOY_TARGET})"
+echo "============================================================"
+
+case "${DEPLOY_TARGET}" in
+  local)
+    echo ">>> Modo: Kind local"
+    bash infra/setup.sh
+    bash infra/build-and-load.sh
+    kubectl apply -f k8s/
+    echo ""
+    echo ">>> Despliegue local completo."
+    echo "    Ejecutar experimentos con: bash scripts/run_experiments.sh"
+    ;;
+  oci)
+    echo ">>> Modo: OCI OKE"
+    bash infra/oci/setup_oke.sh
+    bash infra/oci/ocir_push.sh
+    bash infra/oci/deploy_services.sh
+    echo ""
+    echo ">>> Despliegue OCI completo."
+    echo "    Verificar con: bash infra/oci/verify_oci.sh"
+    ;;
+  *)
+    echo "ERROR: DEPLOY_TARGET debe ser 'local' o 'oci'"
+    echo "Uso: DEPLOY_TARGET=local bash infra/deploy.sh"
+    echo "     DEPLOY_TARGET=oci bash infra/deploy.sh"
+    exit 1
+    ;;
+esac
+```
 
 ## Alcance
 
 **En scope:**
-- Provisionamiento del cluster OKE y recursos OCI asociados
-- Push de imagenes Docker a OCIR (OCI Container Registry)
-- Instalacion de NATS JetStream y MongoDB Replica Set con storage OCI
-- Kustomize overlay para adaptar manifiestos Kind → OKE
-- Ejecucion de los 9 casos de prueba apuntando a IPs publicas OCI
-- Script de setup y teardown reproducible
+- Modo local: documentacion del flujo Kind existente como modo oficial de la Fase 6
+- Modo OCI: provisionamiento del cluster OKE y recursos OCI asociados
+- Modo OCI: push de imagenes Docker a OCIR (OCI Container Registry)
+- Modo OCI: instalacion de NATS JetStream y MongoDB Replica Set con storage OCI
+- Modo OCI: Kustomize overlay para adaptar manifiestos Kind → OKE
+- Ambos modos: ejecucion de los 9 casos de prueba via `kubectl port-forward`
+- Script orquestador unificado (`infra/deploy.sh`) que selecciona modo
 
 **Fuera de scope:**
 - Modificacion de la logica de los 6 microservicios (permanecen identicos)
-- Cambios en los scripts de experimentos (solo cambian URLs base)
+- Cambios en los scripts de experimentos (`run_experiment_a.py`, `run_experiment_b.py`, `validate_asrs.py`)
 - DNS personalizado, TLS/HTTPS, Ingress Controller
 - CI/CD pipeline (el despliegue es manual y reproducible)
 
-## Prerequisitos OCI
+---
 
-El operador debe tener antes de invocar al agente:
+## Modo Local (Kind)
+
+### Prerequisitos
+
+```bash
+# Herramientas (sin credenciales cloud)
+docker --version             # Docker Desktop corriendo
+kind --version               # Kind >= 0.20
+kubectl version --client     # kubectl >= 1.28
+helm version                 # Helm >= 3.12
+```
+
+### Flujo de ejecucion
+
+```bash
+# 1. Despliegue completo (una sola vez)
+DEPLOY_TARGET=local bash infra/deploy.sh
+# Internamente ejecuta:
+#   bash infra/setup.sh           → crea cluster Kind 3 nodos + instala NATS + MongoDB + crea streams + seed
+#   bash infra/build-and-load.sh  → docker build de 6 servicios + kind load docker-image
+#   kubectl apply -f k8s/         → aplica manifiestos con NodePort + imagePullPolicy: Never
+
+# 2. Ejecutar experimentos
+bash scripts/run_experiments.sh
+# Internamente levanta port-forwards a localhost:30090-30096 y ejecuta:
+#   python experiments/experiment_a/run_experiment_a.py  → 5 casos (CP-A1..A5)
+#   python experiments/experiment_b/run_experiment_b.py  → 4 casos (CP-B1..B4)
+#   python scripts/validate_asrs.py                      → genera final_report.json
+
+# 3. Verificar resultado
+cat scripts/final_report.json
+# Esperado: 9/9 PASS, H1: CONFIRMADA, H2: CONFIRMADA
+```
+
+### Scripts involucrados (ya existentes)
+
+| Script | Funcion |
+|---|---|
+| `infra/setup.sh` | Crea cluster Kind, instala NATS JetStream (Helm), instala MongoDB RS (Helm), crea namespaces, streams, seed |
+| `infra/build-and-load.sh` | `docker build` de 6 servicios + `kind load docker-image` para cada uno |
+| `infra/kind-config.yaml` | Cluster 3 nodos: 1 control-plane + 2 workers con labels `role: primary` / `role: standby` |
+| `infra/verify.sh` | Verifica 9 condiciones de salud del cluster local |
+| `scripts/run_experiments.sh` | Orquestador: levanta port-forwards + ejecuta experimentos A y B + genera reporte |
+
+### Estado de validacion
+
+- **Resultado**: 9/9 casos PASS (2026-04-04)
+- **Tiempos**: 0.001 ms - 23.9 ms (todos muy por debajo del umbral de 300 ms)
+- **Nota**: en macOS + Kind, los NodePorts no son accesibles desde el host; se usa `kubectl port-forward`
+
+---
+
+## Modo OCI (OKE)
+
+### Prerequisitos OCI
+
+El operador debe tener antes de invocar el modo OCI:
 
 ```bash
 # 1. OCI CLI instalado y configurado
@@ -50,7 +170,7 @@ export OCIR_USERNAME="${OCI_TENANCY_NAMESPACE}/oracleidentitycloudservice/<email
 export OCIR_PASSWORD="<auth_token>"        # generado en OCI Console > User > Auth Tokens
 ```
 
-## Infraestructura OCI a Provisionar
+### Infraestructura OCI a Provisionar
 
 | Recurso | Especificacion | Justificacion |
 |---|---|---|
@@ -61,7 +181,7 @@ export OCIR_PASSWORD="<auth_token>"        # generado en OCI Console > User > Au
 | Load Balancer | Creado automaticamente por Services tipo LoadBalancer | Acceso publico a modulo-inventarios y validacion-cep |
 | VCN + Subnets | Creados por OKE (managed) | Red del cluster |
 
-## Diferencias Clave vs Kind Local
+### Diferencias Clave vs Kind Local
 
 | Aspecto | Kind (local) | OKE (OCI) |
 |---|---|---|
@@ -87,6 +207,9 @@ export OCIR_PASSWORD="<auth_token>"        # generado en OCI Console > User > Au
 ## Outputs Esperados
 
 ```
+infra/
+├── deploy.sh                     # Orquestador unificado: DEPLOY_TARGET=local|oci
+
 infra/oci/
 ├── setup_oke.sh              # Provisionamiento OKE cluster + node pool
 ├── teardown_oke.sh           # Eliminacion limpia de todos los recursos OCI
@@ -765,6 +888,17 @@ echo ">>> Teardown completo."
 
 ## Criterios de Aceptacion
 
+### Modo Local (Kind)
+
+- [ ] Cluster Kind con 3 nodos (1 CP + 2 workers) en estado `Ready`
+- [ ] Todos los pods en estado `Running` en namespaces `ccp`, `data`, `messaging`
+- [ ] 3 streams NATS creados (HEARTBEAT_INVENTARIO, CORRECCION, FAILOVER)
+- [ ] Los 9 casos de prueba (CP-A1..A5, CP-B1..B4) pasan con PASS via port-forward
+- [ ] `scripts/final_report.json` muestra `all_passed: true`
+- [ ] **Estado: VALIDADO** (9/9 PASS, 2026-04-04)
+
+### Modo OCI (OKE)
+
 - [ ] Cluster OKE con 3 workers en estado `ACTIVE` (`oci ce cluster get`)
 - [ ] 6 imagenes Docker subidas a OCIR (`oci artifacts container image list`)
 - [ ] Todos los pods en estado `Running` en namespace `ccp` (`kubectl get pods -n ccp`)
@@ -773,14 +907,20 @@ echo ">>> Teardown completo."
 - [ ] 3 streams NATS creados (HEARTBEAT_INVENTARIO, CORRECCION, FAILOVER)
 - [ ] Load Balancer IPs accesibles publicamente para modulo-inventarios y validacion-cep
 - [ ] Health check exitoso via IPs publicas (`curl http://<IP>:8090/health`)
-- [ ] Los 9 casos de prueba (CP-A1..A5, CP-B1..B4) pasan con PASS
+- [ ] Los 9 casos de prueba (CP-A1..A5, CP-B1..B4) pasan con PASS via port-forward
 - [ ] `scripts/final_report.json` muestra `all_passed: true`
 - [ ] Script `teardown_oke.sh` elimina todos los recursos sin dejar residuos
+
+### Ambos modos
+
+- [ ] Script `infra/deploy.sh` creado y funcional con `DEPLOY_TARGET=local|oci`
+- [ ] Los scripts de experimento (`run_experiment_a.py`, `run_experiment_b.py`, `validate_asrs.py`) NO fueron modificados
 
 ## Notas de Arquitectura
 
 | Elemento | Decision | Razonamiento |
 |---|---|---|
+| Orquestador unificado `deploy.sh` | Variable `DEPLOY_TARGET` con case/esac | Un solo punto de entrada; evita que el operador ejecute scripts incorrectos para su entorno |
 | Kustomize overlay vs fork de manifiestos | Overlay con patches | Mantiene los manifiestos Kind intactos; el overlay solo cambia lo necesario para OCI |
 | Port-forward vs modificar scripts | Port-forward | Los scripts de experimento no se modifican; se reusan exactamente igual que en local |
 | LoadBalancer solo para INV y CEP | 2 LBs, no 7 | Solo modulo-inventarios y validacion-cep necesitan acceso externo; el resto comunica via DNS interno |
@@ -789,7 +929,19 @@ echo ">>> Teardown completo."
 | Streams NATS con storage memory | Memory, no file | Coherente con la configuracion local; los HeartBeats son efimeros y no necesitan persistencia en disco |
 | Imagenes con tag `latest` | Simplicidad para experimento academico | En produccion real se usarian tags versionados; para el experimento basta con `latest` + `imagePullPolicy: Always` |
 
-## Troubleshooting OCI
+## Troubleshooting
+
+### Modo Local (Kind)
+
+| Problema | Causa probable | Solucion |
+|---|---|---|
+| Pod en `CrashLoopBackOff` | Variable de entorno faltante o URL incorrecta | `kubectl logs <pod> -n ccp`; verificar env vars en manifiesto |
+| `ImagePullBackOff` / `ErrImageNeverPull` | Imagen no cargada con `kind load docker-image` | Re-ejecutar `bash infra/build-and-load.sh` |
+| NodePort no accesible desde macOS | Kind no expone NodePorts al host en macOS | Usar `kubectl port-forward` (el script `run_experiments.sh` lo hace automaticamente) |
+| NATS no conecta | Stream no creado o pod reiniciado | `kubectl get pods -n messaging`; re-ejecutar la seccion de streams de `setup.sh` |
+| MongoDB replica set no se forma | Pods no se ven entre nodos Kind | `kubectl get pods -n data -o wide`; verificar red Docker con `docker network ls` |
+
+### Modo OCI (OKE)
 
 | Problema | Causa probable | Solucion |
 |---|---|---|

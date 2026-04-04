@@ -227,17 +227,28 @@ Reporte generado: resultados_experimento.md
 
 ---
 
-### Fase 6 — Despliegue en Oracle Cloud Infrastructure / OKE (Agente: `oci-oke-deployer`)
+### Fase 6 — Despliegue Multi-entorno: Local Kind + OCI OKE (Agente: `oci-oke-deployer`)
 
 Spec: `spec_oci_oke_deployment.md`
 
 **Depende de:** Todas las fases anteriores completas (1-5). El experimento debe estar validado
 en local con 9/9 PASS antes de intentar el despliegue en OCI.
 
-**Objetivo:** Migrar el entorno Kind local a un cluster OKE real en OCI, demostrando que los
-ASRs se cumplen en infraestructura cloud de produccion.
+**Objetivo:** Proveer dos modos de despliegue intercambiables para el experimento CCP,
+controlados por la variable `DEPLOY_TARGET=local|oci`. El modo local usa Kind (ya validado);
+el modo OCI despliega en un cluster OKE real demostrando que los ASRs se cumplen en
+infraestructura cloud de produccion. Los scripts de experimento no se modifican en ningun caso.
 
 **Lo que hace el agente:**
+
+*Modo local (`DEPLOY_TARGET=local`):*
+1. Verificar prerequisitos locales (Docker, Kind, kubectl, Helm — sin credenciales OCI)
+2. Ejecutar `bash infra/setup.sh` (cluster Kind + NATS + MongoDB + streams + seed)
+3. Ejecutar `bash infra/build-and-load.sh` (build + kind load de 6 imagenes)
+4. Aplicar manifiestos `kubectl apply -f k8s/` (NodePort, imagePullPolicy: Never)
+5. Ejecutar experimentos via `bash scripts/run_experiments.sh` (port-forward + 9 casos)
+
+*Modo OCI (`DEPLOY_TARGET=oci`):*
 1. Verificar prerequisitos OCI (CLI, kubectl, Docker, variables de entorno)
 2. Provisionar cluster OKE con 3 workers (VM.Standard.E4.Flex, 2 OCPUs, 8 GB RAM)
 3. Build + push de las 6 imagenes Docker a OCIR (OCI Container Registry)
@@ -252,6 +263,7 @@ ASRs se cumplen en infraestructura cloud de produccion.
 12. Generar reporte final en OKE
 
 **Archivos creados:**
+- `infra/deploy.sh` — orquestador unificado (`DEPLOY_TARGET=local|oci`)
 - `infra/oci/setup_oke.sh` — provisionamiento del cluster OKE
 - `infra/oci/teardown_oke.sh` — eliminacion limpia de recursos
 - `infra/oci/ocir_push.sh` — build + tag + push de imagenes
@@ -266,10 +278,9 @@ ASRs se cumplen en infraestructura cloud de produccion.
 - `k8s/overlays/oci/patch-remove-nodeselector.yaml` — remueve nodeSelector
 
 **Criterio de salida:**
-- Todos los pods en `Running` en OKE
-- Load Balancer IPs accesibles publicamente
-- Los 9 casos de prueba (CP-A1..A5, CP-B1..B4) pasan con PASS
-- H1 y H2 CONFIRMADAS en entorno OCI real
+- Modo local: 9/9 casos PASS en Kind (ya validado 2026-04-04)
+- Modo OCI: todos los pods en `Running` en OKE + Load Balancer IPs accesibles + 9/9 PASS
+- Ambos: H1 y H2 CONFIRMADAS; scripts de experimento no modificados
 
 ---
 
@@ -284,7 +295,7 @@ ASRs se cumplen en infraestructura cloud de produccion.
 | `harness-asr1` | `spec_harness_experimento_a.md` | `experiments/experiment_a/` | `monitor-corrector-implementor` |
 | `harness-asr2` | `spec_harness_experimento_b.md` | `experiments/experiment_b/` | `cep-implementor` |
 | `metrics-validator` | `spec_metricas_observabilidad.md` | `scripts/validate_asrs.py`, `resultados_experimento.md` | `harness-asr1` + `harness-asr2` |
-| `oci-oke-deployer` | `spec_oci_oke_deployment.md` | `infra/oci/`, `k8s/overlays/oci/`, 9/9 PASS en OKE | `metrics-validator` (Fases 1-5 completas) |
+| `oci-oke-deployer` | `spec_oci_oke_deployment.md` | `infra/deploy.sh`, `infra/oci/`, `k8s/overlays/oci/`, 9/9 PASS en Kind y OKE | `metrics-validator` (Fases 1-5 completas) |
 
 ---
 
@@ -335,7 +346,10 @@ Para ejecutar el plan, invocar los agentes en este orden desde Claude Code:
 Cada agente lee su spec en `.claude/specs/` y produce los archivos especificados
 en la seccion "Outputs Esperados" de esa spec.
 
-**Nota sobre Fase 6:** El agente `oci-oke-deployer` requiere que el operador tenga
-una cuenta OCI activa con las variables de entorno configuradas (`OCI_REGION`,
-`OCI_TENANCY_NAMESPACE`, `OCI_COMPARTMENT_ID`, `OCIR_USERNAME`, `OCIR_PASSWORD`).
-Ver `.claude/specs/spec_oci_oke_deployment.md` para los prerequisitos completos.
+**Nota sobre Fase 6:** El agente `oci-oke-deployer` soporta dos modos de despliegue:
+- `DEPLOY_TARGET=local` — usa Kind, no requiere credenciales cloud (ya validado)
+- `DEPLOY_TARGET=oci` — requiere cuenta OCI activa con variables `OCI_REGION`,
+  `OCI_TENANCY_NAMESPACE`, `OCI_COMPARTMENT_ID`, `OCIR_USERNAME`, `OCIR_PASSWORD`
+
+Punto de entrada unificado: `DEPLOY_TARGET=<modo> bash infra/deploy.sh`.
+Ver `.claude/specs/spec_oci_oke_deployment.md` para los prerequisitos completos de cada modo.

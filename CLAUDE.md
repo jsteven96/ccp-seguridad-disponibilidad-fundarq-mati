@@ -10,6 +10,7 @@ El repositorio contiene:
 1. **Diseño arquitectónico**: diagramas de secuencia Mermaid, diagrama de componentes y diagrama de despliegue (`.claude/docs/`)
 2. **Implementación ejecutable**: 6 microservicios Python/FastAPI desplegados en Kubernetes local (Kind)
 3. **Experimentos de validación**: 9 casos de prueba que confirman las dos hipótesis arquitectónicas
+4. **Despliegue multi-entorno**: scripts para ejecutar el experimento en local (Kind) o en la nube (OCI/OKE) controlado por `DEPLOY_TARGET=local|oci`
 
 **Resultados (2026-04-04)**: 9/9 casos de prueba pasados. H1 confirmada (detección < 300 ms). H2 confirmada (detección < 300 ms).
 
@@ -93,12 +94,22 @@ Si ≥ 2 señales activas → ataque confirmado → HTTP 429 (mensaje genérico,
 ├── ASR_escenario3_ddos_detectado_solo_deteccion.md
 ├── README.md                                 # Guía completa (instalación, ejecución, endpoints)
 ├── infra/                                    # Infraestructura Kubernetes
-│   ├── setup.sh                              # Script maestro: Kind + NATS + MongoDB
-│   ├── verify.sh                             # Verifica 9 condiciones de salud
+│   ├── deploy.sh                             # Orquestador unificado: DEPLOY_TARGET=local|oci
+│   ├── setup.sh                              # Script maestro local: Kind + NATS + MongoDB
+│   ├── verify.sh                             # Verifica 9 condiciones de salud (local)
 │   ├── kind-config.yaml                      # Cluster 3 nodos (1 CP + 2 workers)
 │   ├── mongodb-replicaset.yaml               # StatefulSet MongoDB RS (Primary + Secondary)
 │   ├── mongodb-rs-init-job.yaml              # Seed: colección inventario con 3 SKUs
-│   └── build-and-load.sh                     # docker build + kind load para todos los servicios
+│   ├── build-and-load.sh                     # docker build + kind load para todos los servicios
+│   └── oci/                                  # Scripts exclusivos para OCI/OKE
+│       ├── setup_oke.sh                      # Provisiona cluster OKE + node pool + kubeconfig
+│       ├── teardown_oke.sh                   # Elimina todos los recursos OCI
+│       ├── ocir_push.sh                      # Build + tag + push de 6 imágenes a OCIR
+│       ├── imagepullsecret.sh                # Crea ocir-secret en namespaces ccp/data/messaging
+│       ├── deploy_services.sh                # Instala Helm charts + aplica overlay Kustomize
+│       ├── verify_oci.sh                     # Verifica pods, LB IPs y health checks en OKE
+│       ├── nats-values-oci.yaml              # Helm values NATS con PVC 5Gi (StorageClass oci-bv)
+│       └── mongodb-values-oci.yaml           # Helm values MongoDB RS con PVC 50Gi (StorageClass oci-bv)
 ├── k8s/                                      # Manifiestos de servicios
 │   ├── modulo-inventarios.yaml               # NodePort 30090
 │   ├── inv-standby.yaml + inv-standby-svc.yaml  # NodePort 30095
@@ -106,7 +117,12 @@ Si ≥ 2 señales activas → ataque confirmado → HTTP 429 (mensaje genérico,
 │   ├── corrector.yaml                        # NodePort 30092
 │   ├── validacion-cep.yaml                   # NodePort 30094
 │   ├── modulo-seguridad.yaml                 # NodePort 30093
-│   └── log-auditoria.yaml                    # NodePort 30096
+│   ├── log-auditoria.yaml                    # NodePort 30096
+│   └── overlays/oci/                         # Kustomize overlay para OKE
+│       ├── kustomization.yaml                # Refs OCIR + 3 patches
+│       ├── patch-imagepull.yaml              # imagePullSecrets + imagePullPolicy: Always
+│       ├── patch-services-lb.yaml            # NodePort → LoadBalancer (INV + CEP)
+│       └── patch-remove-nodeselector.yaml    # Elimina nodeSelector (no aplica en OKE)
 ├── services/                                 # Código fuente (Python 3.11 + FastAPI)
 │   ├── modulo_inventarios/                   # VALCOH + HeartBeat + fault injection
 │   ├── monitor/                              # Router NATS por tipo de HeartBeat
@@ -140,13 +156,18 @@ Si ≥ 2 señales activas → ataque confirmado → HTTP 429 (mensaje genérico,
 
 | Capa | Tecnología | Notas |
 |---|---|---|
-| Orquestación | Kind (Kubernetes IN Docker) | 3 nodos: 1 control-plane + 2 workers |
+| Orquestación local | Kind (Kubernetes IN Docker) | 3 nodos: 1 control-plane + 2 workers |
+| Orquestación cloud | OKE (Oracle Kubernetes Engine) | 3 workers VM.Standard.E4.Flex, 2 OCPUs, 8 GB |
+| Registry local | `kind load docker-image` | Carga imágenes directamente en el cluster Kind |
+| Registry cloud | OCIR (OCI Container Registry) | `<region>.ocir.io/<namespace>/ccp/<servicio>:latest` |
 | Broker | NATS JetStream | Helm chart oficial; 3 streams |
 | Base de datos | MongoDB 7.0 Replica Set | Primary :27017 / Secondary :27018; campo `SKU` en mayúsculas |
+| Storage local | emptyDir / PVC Kind | Sin persistencia real (válido para experimento) |
+| Storage cloud | OCI Block Volume (`oci-bv`) | PVCs reales: 50 GB MongoDB, 5 GB NATS |
 | Microservicios | Python 3.11 + FastAPI + Uvicorn | motor==3.4.0 + pymongo==4.6.3 (pin necesario) |
 | Mensajería async | nats-py==2.7.2 | JetStream con durable consumer + manual_ack=True |
 | Acceso MongoDB | motor==3.4.0 | pymongo debe ser 4.6.3 (4.7+ incompatible con motor 3.4) |
-| Host access | kubectl port-forward | NodePorts no accesibles desde macOS en Kind |
+| Host access | kubectl port-forward | NodePorts no accesibles desde macOS en Kind; en OKE se usa LB IP |
 
 ---
 
@@ -188,11 +209,12 @@ Si ≥ 2 señales activas → ataque confirmado → HTTP 429 (mensaje genérico,
 
 ## Ejecución rápida
 
+### Modo local (Kind)
+
 ```bash
 # 1. Levantar infraestructura (una vez)
-bash infra/setup.sh
-bash infra/build-and-load.sh
-kubectl apply -f k8s/
+DEPLOY_TARGET=local bash infra/deploy.sh
+# equivalente a: bash infra/setup.sh && bash infra/build-and-load.sh && kubectl apply -f k8s/
 
 # 2. Correr todos los experimentos
 bash scripts/run_experiments.sh
@@ -204,3 +226,29 @@ python3 scripts/live_dashboard.py --demo  # inyecta fallos automáticamente
 ```
 
 > **macOS + Kind**: los NodePorts no son accesibles desde el host. El script `run_experiments.sh` levanta `kubectl port-forward` automáticamente.
+
+### Modo OCI (OKE)
+
+```bash
+# 1. Exportar credenciales OCI
+export OCI_REGION="sa-bogota-1"
+export OCI_TENANCY_NAMESPACE="<namespace>"
+export OCI_COMPARTMENT_ID="ocid1.compartment.oc1..<id>"
+export OCIR_USERNAME="<namespace>/oracleidentitycloudservice/<email>"
+export OCIR_PASSWORD="<auth_token>"
+
+# 2. Provisionar OKE, subir imágenes a OCIR y desplegar servicios
+DEPLOY_TARGET=oci bash infra/deploy.sh
+# equivalente a: setup_oke.sh → ocir_push.sh → deploy_services.sh
+
+# 3. Verificar despliegue
+bash infra/oci/verify_oci.sh
+
+# 4. Correr experimentos (mismos scripts, vía port-forward)
+bash scripts/run_experiments.sh
+
+# 5. Teardown (elimina todos los recursos OCI)
+bash infra/oci/teardown_oke.sh
+```
+
+> **Kustomize overlay**: `infra/deploy.sh` en modo OCI aplica `k8s/overlays/oci/` que sustituye imágenes por OCIR, cambia NodePort → LoadBalancer en INV y CEP, y elimina `nodeSelector`.

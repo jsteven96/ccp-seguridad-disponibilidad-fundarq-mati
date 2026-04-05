@@ -11,6 +11,10 @@ Implementa y ejecuta un experimento controlado sobre un **Centro de Control de P
 
 **Resultado del experimento: 9/9 casos de prueba exitosos. H1 y H2 confirmadas.**
 
+El experimento puede ejecutarse en **dos entornos**:
+- **Local (Kind)** — Kubernetes en Docker, sin dependencias de nube
+- **OCI (OKE)** — Oracle Kubernetes Engine en producción real
+
 ---
 
 ## Tabla de contenidos
@@ -18,8 +22,8 @@ Implementa y ejecuta un experimento controlado sobre un **Centro de Control de P
 1. [Arquitectura del sistema](#1-arquitectura-del-sistema)
 2. [Estructura del repositorio](#2-estructura-del-repositorio)
 3. [Prerrequisitos](#3-prerrequisitos)
-4. [Levantar la infraestructura](#4-levantar-la-infraestructura)
-5. [Construir y desplegar los servicios](#5-construir-y-desplegar-los-servicios)
+4. [Ejecución local (Kind)](#4-ejecución-local-kind)
+5. [Despliegue en OCI (OKE)](#5-despliegue-en-oci-oke)
 6. [Ejecutar el experimento](#6-ejecutar-el-experimento)
 7. [Dashboard en tiempo real](#7-dashboard-en-tiempo-real)
 8. [Resultados obtenidos](#8-resultados-obtenidos)
@@ -86,117 +90,147 @@ Implementa y ejecuta un experimento controlado sobre un **Centro de Control de P
 
 ```
 .
-├── ASR_escenario*.md          # Documentación de escenarios (diagramas Mermaid)
-├── infra/                     # Infraestructura Kubernetes local
-│   ├── kind-config.yaml       # Cluster Kind (1 control-plane + 2 workers)
-│   ├── namespaces.yaml        # Namespaces: ccp, data, messaging
-│   ├── mongodb-replicaset.yaml# MongoDB Replica Set StatefulSet (mongo:7.0)
-│   ├── mongodb-rs-init-job.yaml# Job de inicialización del RS y seed de datos
-│   ├── nats-values.yaml       # Helm values para NATS JetStream
-│   ├── setup.sh               # Script maestro de setup de infraestructura
-│   └── verify.sh              # Script de verificación de infraestructura
-├── k8s/                       # Manifiestos Kubernetes de servicios
-│   ├── modulo-inventarios.yaml
-│   ├── inv-standby.yaml
-│   ├── inv-standby-svc.yaml
-│   ├── monitor.yaml
-│   ├── corrector.yaml
-│   ├── validacion-cep.yaml
-│   ├── modulo-seguridad.yaml
-│   └── log-auditoria.yaml
-├── services/                  # Código fuente de microservicios (Python/FastAPI)
-│   ├── modulo_inventarios/    # HeartBeat + VALCOH + reservas
-│   ├── monitor/               # Suscriptor NATS → router
-│   ├── corrector/             # Acciones correctivas (rollback, reconciliar, failover)
-│   ├── validacion_cep/        # Motor CEP con ventana deslizante
-│   ├── modulo_seguridad/      # Revocación JWT + bloqueo de actores
-│   └── log_auditoria/         # Persistencia forense en MongoDB
+├── ASR_escenario*.md              # Documentación de escenarios (diagramas Mermaid)
+├── infra/
+│   ├── deploy.sh                  # Orquestador unificado: DEPLOY_TARGET=local|oci
+│   ├── setup.sh                   # Setup local: Kind + NATS + MongoDB
+│   ├── build-and-load.sh          # docker build + kind load (todos los servicios)
+│   ├── verify.sh                  # Verifica 9 condiciones de salud (local)
+│   ├── kind-config.yaml           # Cluster Kind (1 control-plane + 2 workers)
+│   ├── namespaces.yaml            # Namespaces: ccp, data, messaging
+│   ├── mongodb-replicaset.yaml    # MongoDB RS StatefulSet (mongo:7.0)
+│   ├── mongodb-rs-init-job.yaml   # Seed de inventario inicial
+│   ├── nats-values.yaml           # Helm values NATS (local)
+│   └── oci/                       # Scripts exclusivos para OCI/OKE
+│       ├── setup_oke.sh           # Provisiona cluster OKE + node pool + kubeconfig
+│       ├── teardown_oke.sh        # Elimina todos los recursos OCI
+│       ├── ocir_push.sh           # Build + tag + push de 6 imágenes a OCIR
+│       ├── imagepullsecret.sh     # Crea ocir-secret en namespaces ccp/data/messaging
+│       ├── deploy_services.sh     # Instala Helm + aplica overlay Kustomize
+│       ├── verify_oci.sh          # Verifica pods, LB IPs y health checks
+│       ├── nats-values-oci.yaml   # Helm values NATS con PVC 5Gi (oci-bv)
+│       └── mongodb-values-oci.yaml# Helm values MongoDB RS con PVC 50Gi (oci-bv)
+├── k8s/
+│   ├── modulo-inventarios.yaml    # NodePort 30090
+│   ├── inv-standby.yaml + inv-standby-svc.yaml
+│   ├── monitor.yaml               # NodePort 30091
+│   ├── corrector.yaml             # NodePort 30092
+│   ├── validacion-cep.yaml        # NodePort 30094
+│   ├── modulo-seguridad.yaml      # NodePort 30093
+│   ├── log-auditoria.yaml         # NodePort 30096
+│   └── overlays/oci/              # Kustomize overlay para OKE
+│       ├── kustomization.yaml     # Refs OCIR + 3 patches
+│       ├── patch-imagepull.yaml   # imagePullSecrets + imagePullPolicy: Always
+│       ├── patch-services-lb.yaml # NodePort → LoadBalancer (INV + CEP)
+│       └── patch-remove-nodeselector.yaml
+├── services/                      # Código fuente (Python 3.11 + FastAPI)
+│   ├── modulo_inventarios/        # HeartBeat + VALCOH + reservas
+│   ├── monitor/                   # Suscriptor NATS → router
+│   ├── corrector/                 # Rollback, reconciliación, failover
+│   ├── validacion_cep/            # Motor CEP con ventana deslizante
+│   ├── modulo_seguridad/          # Revocación JWT + bloqueo de actores
+│   └── log_auditoria/             # Persistencia forense en MongoDB
 ├── experiments/
-│   ├── experiment_a/          # CP-A1 a CP-A5 (ASR-1 Disponibilidad)
-│   └── experiment_b/          # CP-B1 a CP-B4 (ASR-2 Seguridad)
+│   ├── experiment_a/              # CP-A1 a CP-A5 (ASR-1 Disponibilidad)
+│   └── experiment_b/              # CP-B1 a CP-B4 (ASR-2 Seguridad)
 └── scripts/
-    ├── run_experiments.sh     # Orquestador principal (port-forwards + A + B + reporte)
-    ├── validate_asrs.py       # Genera reporte final a partir de los JSON de resultados
-    ├── live_dashboard.py      # Dashboard en tiempo real (terminal)
-    └── final_report.json      # Último reporte generado
+    ├── run_experiments.sh         # Orquestador: port-forwards + A + B + reporte
+    ├── validate_asrs.py           # Genera reporte final desde los JSON de resultados
+    ├── live_dashboard.py          # Dashboard en tiempo real (terminal)
+    └── final_report.json          # Último reporte generado
 ```
 
 ---
 
 ## 3. Prerrequisitos
 
+### Comunes (ambos modos)
+
 | Herramienta | Versión mínima | Instalación |
 |-------------|---------------|-------------|
 | Docker Desktop | 4.x | https://www.docker.com/products/docker-desktop |
-| Kind | 0.20+ | `brew install kind` |
 | kubectl | 1.28+ | `brew install kubectl` |
-| Helm | 3.x | `brew install helm` |
+| Helm | 3.12+ | `brew install helm` |
 | Python | 3.11+ | `brew install python@3.11` |
-| NATS CLI | 0.1+ | `brew install nats-io/nats-tools/nats` |
-
-Dependencias Python (solo para los scripts del host):
 
 ```bash
 pip3 install httpx
+```
+
+### Solo para modo local
+
+| Herramienta | Versión mínima | Instalación |
+|-------------|---------------|-------------|
+| Kind | 0.20+ | `brew install kind` |
+| NATS CLI | 0.1+ | `brew install nats-io/nats-tools/nats` |
+
+### Solo para modo OCI
+
+| Herramienta | Versión mínima | Instalación |
+|-------------|---------------|-------------|
+| OCI CLI | 3.x | `brew install oci-cli` |
+
+Además se requieren las siguientes variables de entorno con credenciales OCI (ver [sección 5](#5-despliegue-en-oci-oke)):
+
+```
+OCI_REGION, OCI_TENANCY_NAMESPACE, OCI_COMPARTMENT_ID, OCIR_USERNAME, OCIR_PASSWORD
 ```
 
 > **Nota**: Docker Desktop debe estar corriendo antes de ejecutar cualquier paso.
 
 ---
 
-## 4. Levantar la infraestructura
+## 4. Ejecución local (Kind)
 
-Todo el setup de infraestructura se puede ejecutar con un solo script:
+Este modo despliega el experimento en un cluster Kubernetes local usando Kind (Kubernetes in Docker). No requiere cuenta de nube.
+
+### 4.1 Setup en un comando
 
 ```bash
-bash infra/setup.sh
+DEPLOY_TARGET=local bash infra/deploy.sh
 ```
 
-O paso a paso:
+Este comando ejecuta en secuencia:
+1. `bash infra/setup.sh` — crea el cluster Kind, instala NATS y MongoDB, crea los streams
+2. `bash infra/build-and-load.sh` — construye las 6 imágenes Docker y las carga en Kind
+3. `kubectl apply -f k8s/` — despliega los 7 pods de servicios
 
-### 4.1 Crear el cluster Kind
+Duración aproximada: **5-8 minutos** la primera vez.
+
+### 4.2 Setup paso a paso
+
+#### Crear el cluster Kind
 
 ```bash
 kind create cluster --name ccp-experiment --config infra/kind-config.yaml
 ```
 
-Esto crea un cluster con:
-- 1 nodo `control-plane` (con port mapping 8080 y 4222 al host)
+Crea un cluster con:
+- 1 nodo `control-plane`
 - 1 nodo `worker` con label `node-role=primary`
 - 1 nodo `worker` con label `node-role=standby`
 
-### 4.2 Crear namespaces
+#### Crear namespaces
 
 ```bash
 kubectl apply -f infra/namespaces.yaml
 ```
 
-Crea los namespaces `ccp`, `data` y `messaging`.
-
-### 4.3 Desplegar NATS JetStream
+#### Instalar NATS JetStream
 
 ```bash
 helm repo add nats https://nats-io.github.io/k8s/helm/charts/
 helm repo update
 helm install nats nats/nats -n messaging -f infra/nats-values.yaml
+kubectl get pods -n messaging -w  # esperar Running
 ```
 
-Espera a que el pod esté `Running`:
+#### Crear los streams NATS
 
 ```bash
-kubectl get pods -n messaging -w
-```
-
-### 4.4 Crear streams NATS
-
-Una vez que NATS esté corriendo, crea los 3 streams del experimento:
-
-```bash
-# Port-forward temporal
 kubectl port-forward svc/nats -n messaging 4222:4222 &
 sleep 2
 
-# Crear streams
 nats stream add HEARTBEAT_INVENTARIO \
   --subjects "heartbeat.inventario.>" \
   --storage file --retention limits \
@@ -215,56 +249,77 @@ nats stream add FAILOVER \
   --max-msgs 1000 --max-age 24h \
   --replicas 1 --server nats://localhost:4222
 
-kill %1  # cerrar port-forward
+kill %1
 ```
 
-### 4.5 Desplegar MongoDB Replica Set
+#### Desplegar MongoDB Replica Set
 
 ```bash
 kubectl apply -f infra/mongodb-replicaset.yaml
-```
-
-Espera a que ambos pods estén `Running` y el job de init haya completado:
-
-```bash
 kubectl get pods -n data -w
 # Esperar: mongodb-0 Running, mongodb-1 Running, mongodb-rs-init-* Completed
 ```
 
-El job de inicialización:
-- Configura el replica set `rs0` (mongodb-0 como PRIMARY, mongodb-1 como SECONDARY)
-- Crea la base de datos `ccp` con la colección `inventario` y seed inicial:
-  - `COCA-COLA-350`: stock=9
-  - `AGUA-500`: stock=100
-  - `ARROZ-1KG`: stock=50
+El job de inicialización configura el replica set `rs0` y crea la colección `inventario` con seed:
+- `COCA-COLA-350`: stock=9
+- `AGUA-500`: stock=100
+- `ARROZ-1KG`: stock=50
 
-### 4.6 Verificar infraestructura
+#### Construir y cargar imágenes
+
+```bash
+bash infra/build-and-load.sh
+```
+
+O manualmente:
+
+```bash
+for svc in modulo_inventarios monitor corrector validacion_cep modulo_seguridad log_auditoria; do
+  img=$(echo $svc | tr '_' '-')
+  docker build -t ccp/$img:latest services/$svc/
+  kind load docker-image ccp/$img:latest --name ccp-experiment
+done
+```
+
+#### Desplegar los servicios
+
+```bash
+kubectl apply -f k8s/
+kubectl get pods -n ccp -w
+```
+
+Todos los pods deben estar `1/1 Running`:
+
+```
+NAME                               READY   STATUS    RESTARTS   AGE
+corrector-xxx                      1/1     Running   0          1m
+log-auditoria-xxx                  1/1     Running   0          1m
+modulo-inventarios-xxx             1/1     Running   0          1m
+modulo-inventarios-standby-xxx     1/1     Running   0          1m
+modulo-seguridad-xxx               1/1     Running   0          1m
+monitor-xxx                        1/1     Running   0          1m
+validacion-cep-xxx                 1/1     Running   0          1m
+```
+
+#### Verificar infraestructura
 
 ```bash
 bash infra/verify.sh
 ```
 
 Salida esperada:
+
 ```
 ============================================================
  CCP Experiment — Verificacion de Infraestructura
 ============================================================
-
---- Cluster Kind ---
   ✅  Cluster 'ccp-experiment' existe
   ✅  3 nodos Ready
-  ✅  worker-node-2 tiene label role=standby
-
---- Namespaces ---
   ✅  Namespace 'ccp' existe
   ✅  Namespace 'data' existe
   ✅  Namespace 'messaging' existe
-
---- MongoDB Replica Set ---
   ✅  mongodb-0 Running en data
   ✅  mongodb-1 Running en data
-
---- Streams NATS ---
   ✅  Stream HEARTBEAT_INVENTARIO
   ✅  Stream CORRECCION
   ✅  Stream FAILOVER
@@ -273,106 +328,289 @@ Salida esperada:
 ============================================================
 ```
 
+> **macOS + Kind**: los NodePorts **no son accesibles desde el host** cuando Kind corre en Docker Desktop. Todos los scripts (`run_experiments.sh`, `live_dashboard.py`) usan `kubectl port-forward` automáticamente.
+
 ---
 
-## 5. Construir y desplegar los servicios
+## 5. Despliegue en OCI (OKE)
 
-### 5.1 Construir imágenes Docker
+Este modo despliega el experimento en un cluster OKE real en Oracle Cloud Infrastructure. Requiere cuenta OCI y credenciales configuradas.
 
-```bash
-docker build -t ccp/modulo-inventarios:latest services/modulo_inventarios/
-docker build -t ccp/monitor:latest             services/monitor/
-docker build -t ccp/corrector:latest           services/corrector/
-docker build -t ccp/validacion-cep:latest      services/validacion_cep/
-docker build -t ccp/modulo-seguridad:latest    services/modulo_seguridad/
-docker build -t ccp/log-auditoria:latest       services/log_auditoria/
-```
+### 5.1 Configurar credenciales OCI
 
-O en paralelo:
+#### Instalar y configurar OCI CLI
 
 ```bash
-for svc in modulo_inventarios monitor corrector validacion_cep modulo_seguridad log_auditoria; do
-  img=$(echo $svc | tr '_' '-')
-  docker build -t ccp/$img:latest services/$svc/ &
-done
-wait && echo "Todos los builds completados"
+# macOS
+brew install oci-cli
+
+# Configurar (genera ~/.oci/config con tenancy OCID, user OCID, API key, region)
+oci setup config
 ```
 
-### 5.2 Cargar imágenes al cluster Kind
-
-Kind no accede al registry local de Docker; las imágenes deben cargarse explícitamente:
+#### Exportar variables de entorno
 
 ```bash
-kind load docker-image ccp/modulo-inventarios:latest --name ccp-experiment
-kind load docker-image ccp/monitor:latest             --name ccp-experiment
-kind load docker-image ccp/corrector:latest           --name ccp-experiment
-kind load docker-image ccp/validacion-cep:latest      --name ccp-experiment
-kind load docker-image ccp/modulo-seguridad:latest    --name ccp-experiment
-kind load docker-image ccp/log-auditoria:latest       --name ccp-experiment
+export OCI_REGION="sa-bogota-1"                     # tu región OCI
+export OCI_TENANCY_NAMESPACE="<namespace>"           # OCI Console > Tenancy details
+export OCI_COMPARTMENT_ID="ocid1.compartment.oc1..<id>"
+export OCIR_USERNAME="${OCI_TENANCY_NAMESPACE}/oracleidentitycloudservice/<tu-email>"
+export OCIR_PASSWORD="<auth_token>"                 # OCI Console > User > Auth Tokens
 ```
 
-### 5.3 Desplegar en Kubernetes
+Para obtener el namespace del tenancy:
 
 ```bash
-kubectl apply -f k8s/modulo-inventarios.yaml
-kubectl apply -f k8s/inv-standby.yaml
-kubectl apply -f k8s/inv-standby-svc.yaml
-kubectl apply -f k8s/monitor.yaml
-kubectl apply -f k8s/corrector.yaml
-kubectl apply -f k8s/validacion-cep.yaml
-kubectl apply -f k8s/modulo-seguridad.yaml
-kubectl apply -f k8s/log-auditoria.yaml
+oci os ns get --query 'data' --raw-output
 ```
 
-### 5.4 Verificar pods
+Para crear un Auth Token (necesario para OCIR):
+1. OCI Console → esquina superior derecha → tu usuario → **Auth Tokens**
+2. **Generate Token** → copiar el valor (no se muestra de nuevo)
+
+#### Verificar login a OCIR
 
 ```bash
-kubectl get pods -n ccp
+docker login "${OCI_REGION}.ocir.io" \
+  -u "${OCIR_USERNAME}" \
+  -p "${OCIR_PASSWORD}"
+# Expected: Login Succeeded
 ```
 
-Todos los pods deben estar `1/1 Running`:
+### 5.2 Despliegue en un comando
 
-```
-NAME                                          READY   STATUS    RESTARTS   AGE
-corrector-xxx                                 1/1     Running   0          1m
-log-auditoria-xxx                             1/1     Running   0          1m
-modulo-inventarios-xxx                        1/1     Running   0          1m
-modulo-inventarios-standby-xxx                1/1     Running   0          1m
-modulo-seguridad-xxx                          1/1     Running   0          1m
-monitor-xxx                                   1/1     Running   0          1m
-validacion-cep-xxx                            1/1     Running   0          1m
+Con las variables exportadas:
+
+```bash
+DEPLOY_TARGET=oci bash infra/deploy.sh
 ```
 
-> **Nota sobre el Monitor**: usa un consumer durable de NATS. Si el pod se reinicia mientras otro ya está conectado, el nuevo pod no podrá suscribirse hasta que el pod viejo libere el consumer. En ese caso, forzar la eliminación del pod viejo:
+Este comando ejecuta en secuencia:
+1. `bash infra/oci/setup_oke.sh` — provisiona el cluster OKE y configura kubeconfig
+2. `bash infra/oci/ocir_push.sh` — construye las 6 imágenes y las sube a OCIR
+3. `bash infra/oci/deploy_services.sh` — instala NATS y MongoDB vía Helm, aplica el overlay Kustomize y espera los rollouts
+
+Duración aproximada: **15-25 minutos** (el cluster OKE tarda ~10 min en estar activo).
+
+### 5.3 Despliegue paso a paso
+
+#### Paso 1 — Provisionar el cluster OKE
+
+```bash
+bash infra/oci/setup_oke.sh
+```
+
+Este script:
+- Crea un cluster OKE llamado `ccp-experiment-oke` (Kubernetes 1.28, endpoint público)
+- Crea un node pool `ccp-workers` con 3 nodos `VM.Standard.E4.Flex` (2 OCPUs, 8 GB RAM)
+- Descarga el kubeconfig y lo fusiona con `~/.kube/config`
+
+> **Prerequisito**: antes de correr el script debes obtener los IDs de subnet y availability domain de tu tenancy:
 > ```bash
-> kubectl delete pod -n ccp <nombre-pod-viejo> --force --grace-period=0
+> # Ver availability domains disponibles
+> oci iam availability-domain list --compartment-id "${OCI_COMPARTMENT_ID}"
+>
+> # Ver subnets del compartment
+> oci network subnet list --compartment-id "${OCI_COMPARTMENT_ID}"
+>
+> # Ver imágenes de nodo compatibles con OKE
+> oci ce node-pool-options get --node-pool-option-id all \
+>   --query 'data.sources[?sourceType==`IMAGE`].{id:imageId,name:sourceName}' | head -20
 > ```
+> Edita `infra/oci/setup_oke.sh` y reemplaza `${ENDPOINT_SUBNET_ID}`, `${LB_SUBNET_ID}`, `${WORKER_SUBNET_ID}`, `${NODE_IMAGE_ID}` y `${AD}` con los valores de tu cuenta.
+
+Verificar que el cluster esté listo:
+
+```bash
+kubectl get nodes
+# NAME          STATUS   ROLES   AGE   VERSION
+# 10.x.x.x     Ready    node    5m    v1.28.x
+# 10.x.x.x     Ready    node    5m    v1.28.x
+# 10.x.x.x     Ready    node    5m    v1.28.x
+```
+
+#### Paso 2 — Subir imágenes a OCIR
+
+```bash
+bash infra/oci/ocir_push.sh
+```
+
+Este script construye las 6 imágenes Docker, las etiqueta con la ruta OCIR y las sube:
+
+```
+<region>.ocir.io/<namespace>/ccp/modulo-inventarios:latest
+<region>.ocir.io/<namespace>/ccp/monitor:latest
+<region>.ocir.io/<namespace>/ccp/corrector:latest
+<region>.ocir.io/<namespace>/ccp/validacion-cep:latest
+<region>.ocir.io/<namespace>/ccp/modulo-seguridad:latest
+<region>.ocir.io/<namespace>/ccp/log-auditoria:latest
+```
+
+Verificar en OCI Console → **Container Registry** → repositorio `ccp/`.
+
+#### Paso 3 — Crear imagePullSecret para OCIR
+
+El secret permite que los pods descarguen imágenes desde OCIR:
+
+```bash
+bash infra/oci/imagepullsecret.sh
+```
+
+Crea el secret `ocir-secret` en los namespaces `ccp`, `data` y `messaging`.
+
+#### Paso 4 — Instalar NATS JetStream
+
+```bash
+helm repo add nats https://nats-io.github.io/k8s/helm/charts/ 2>/dev/null || true
+helm repo update
+
+kubectl create namespace messaging --dry-run=client -o yaml | kubectl apply -f -
+
+helm install nats nats/nats \
+  -n messaging \
+  -f infra/oci/nats-values-oci.yaml \
+  --wait --timeout 5m
+```
+
+Usa `StorageClass: oci-bv` (OCI Block Volume) con PVC de 5 Gi para persistencia JetStream.
+
+#### Paso 5 — Instalar MongoDB Replica Set
+
+```bash
+helm repo add bitnami https://charts.bitnami.com/bitnami 2>/dev/null || true
+helm repo update
+
+kubectl create namespace data --dry-run=client -o yaml | kubectl apply -f -
+
+helm install mongodb bitnami/mongodb \
+  -n data \
+  -f infra/oci/mongodb-values-oci.yaml \
+  --wait --timeout 10m
+```
+
+Usa `StorageClass: oci-bv` con PVCs de 50 Gi por réplica.
+
+#### Paso 6 — Crear streams NATS
+
+```bash
+kubectl port-forward svc/nats -n messaging 4222:4222 &
+sleep 3
+
+nats stream add HEARTBEAT_INVENTARIO \
+  --subjects "heartbeat.inventario.*" \
+  --storage memory --replicas 1 \
+  --retention limits --max-msgs 10000 --max-age 1h \
+  --server nats://localhost:4222
+
+nats stream add CORRECCION \
+  --subjects "correccion.*" \
+  --storage memory --replicas 1 \
+  --retention limits --max-msgs 10000 --max-age 1h \
+  --server nats://localhost:4222
+
+nats stream add FAILOVER \
+  --subjects "failover.*" \
+  --storage memory --replicas 1 \
+  --retention limits --max-msgs 10000 --max-age 1h \
+  --server nats://localhost:4222
+
+kill %1
+```
+
+#### Paso 7 — Aplicar el overlay Kustomize
+
+```bash
+bash infra/oci/deploy_services.sh
+```
+
+El overlay en `k8s/overlays/oci/` aplica 3 transformaciones sobre los manifiestos base:
+- **Imágenes**: reemplaza `ccp/<servicio>:latest` por `<region>.ocir.io/<namespace>/ccp/<servicio>:latest`
+- **imagePullPolicy**: cambia `Never` → `Always` en todos los Deployments
+- **imagePullSecrets**: agrega `ocir-secret` a todos los Deployments
+- **Service type**: cambia `NodePort` → `LoadBalancer` en `modulo-inventarios` y `validacion-cep`
+- **nodeSelector**: elimina `nodeSelector` (no aplica en OKE; el scheduler lo maneja)
+
+Espera el rollout de los 7 Deployments.
+
+#### Paso 8 — Inicializar MongoDB con seed
+
+```bash
+kubectl port-forward svc/mongodb-headless -n data 27017:27017 &
+sleep 3
+
+python3 scripts/init_inventory.py
+
+kill %1
+```
+
+#### Paso 9 — Verificar despliegue
+
+```bash
+bash infra/oci/verify_oci.sh
+```
+
+Salida esperada:
+
+```
+============================================================
+ CCP — Verificacion del Despliegue OKE
+============================================================
+>>> [1/5] Pods en namespace ccp...
+NAME                            READY   STATUS    RESTARTS
+corrector-xxx                   1/1     Running   0
+log-auditoria-xxx               1/1     Running   0
+modulo-inventarios-xxx          1/1     Running   0
+inv-standby-xxx                 1/1     Running   0
+modulo-seguridad-xxx            1/1     Running   0
+monitor-xxx                     1/1     Running   0
+validacion-cep-xxx              1/1     Running   0
+
+>>> [4/5] Services con IPs externas...
+NAME                  TYPE           CLUSTER-IP    EXTERNAL-IP      PORT(S)
+modulo-inventarios    LoadBalancer   10.x.x.x      <IP-PUBLICA>     8090:xxx/TCP
+validacion-cep        LoadBalancer   10.x.x.x      <IP-PUBLICA>     8094:xxx/TCP
+
+>>> [5/5] Health checks via LoadBalancer IPs...
+    modulo-inventarios: http://<IP>:8090/health -> OK
+    validacion-cep: http://<IP>:8094/health -> OK
+============================================================
+```
+
+### 5.4 Teardown (eliminar recursos OCI)
+
+Para eliminar todos los recursos y evitar costos:
+
+```bash
+bash infra/oci/teardown_oke.sh
+```
+
+Este script elimina en orden: servicios K8s, releases Helm, PVCs, namespaces, y el cluster OKE. Las imágenes de OCIR se eliminan manualmente desde OCI Console → Container Registry.
 
 ---
 
 ## 6. Ejecutar el experimento
 
-### Opción A — Script completo (recomendado)
+Los scripts de experimento funcionan igual en ambos entornos (local y OCI) porque ambos usan `kubectl port-forward` para exponer los servicios en `localhost:30090-30096`.
 
-Ejecuta ambos experimentos en secuencia, genera el reporte final:
+### Opción A — Script completo (recomendado)
 
 ```bash
 bash scripts/run_experiments.sh
 ```
 
 El script:
-1. Levanta port-forwards para todos los servicios
-2. Ejecuta Experimento A (CP-A1 a CP-A5)
-3. Ejecuta Experimento B (CP-B1 a CP-B4)
+1. Levanta port-forwards para los 6 servicios
+2. Ejecuta Experimento A (CP-A1 a CP-A5) — ASR-1 Disponibilidad
+3. Ejecuta Experimento B (CP-B1 a CP-B4) — ASR-2 Seguridad
 4. Genera `scripts/final_report.json`
 5. Cierra los port-forwards al salir
 
-Duración aproximada: **3-4 minutos** (incluye esperas de HeartBeat y envíos espaciados).
+Duración: **3-4 minutos**.
 
 ### Opción B — Experimentos por separado
 
 ```bash
-# Primero abrir port-forwards en background
+# Abrir port-forwards
 kubectl port-forward -n ccp svc/modulo-inventarios 30090:8090 &>/dev/null &
 kubectl port-forward -n ccp svc/monitor            30091:8091 &>/dev/null &
 kubectl port-forward -n ccp svc/corrector          30092:8092 &>/dev/null &
@@ -387,7 +625,7 @@ python3 experiments/experiment_a/run_experiment_a.py
 # Experimento B — ASR-2 Seguridad
 python3 experiments/experiment_b/run_experiment_b.py
 
-# Reporte final (solo lectura de resultados, no re-ejecuta)
+# Reporte final
 python3 scripts/validate_asrs.py
 ```
 
@@ -412,26 +650,18 @@ python3 scripts/validate_asrs.py
 | **CP-B3** | DDoS con JWT válido | JWT válido no exime del análisis CEP | HTTP 429 igualmente y `jwt_bypassed = false` |
 | **CP-B4** | Umbral de correlación exacto | ≥ 2 señales = ataque; 1 señal = no ataque | 12 req → 429; 9 req → 200 |
 
-### Limpiar el estado entre ejecuciones
-
-Si necesitas re-ejecutar los experimentos con estado limpio:
+### Limpiar estado entre ejecuciones
 
 ```bash
-# Puerto forward activo
-kubectl port-forward -n ccp svc/modulo-inventarios 30090:8090 &
-sleep 2
-
-# Resetear inventario (stocks a valores iniciales)
+# Resetear inventario a valores iniciales
 curl -s -X POST http://localhost:30090/reset
 
-# Limpiar fault injection si quedó activo
+# Desactivar fault injection si quedó activo
 curl -s -X POST http://localhost:30090/fault-inject \
      -H "Content-Type: application/json" \
      -d '{"tipo": "none"}'
 
 # Limpiar ventana CEP
-kubectl port-forward -n ccp svc/validacion-cep 30094:8094 &
-sleep 1
 curl -s -X POST http://localhost:30094/reset
 ```
 
@@ -439,7 +669,7 @@ curl -s -X POST http://localhost:30094/reset
 
 ## 7. Dashboard en tiempo real
 
-El dashboard muestra el estado del sistema en vivo desde la terminal, actualizándose cada 2 segundos.
+Muestra el estado del sistema en vivo desde la terminal, actualizándose cada 2 segundos.
 
 ### Modo monitoreo
 
@@ -460,7 +690,7 @@ Muestra:
 python3 scripts/live_dashboard.py --demo
 ```
 
-Inyecta automáticamente la siguiente secuencia, observable en tiempo real:
+Inyecta automáticamente:
 
 ```
 1. Estado normal        (10s) → SELF_TEST_OK continuo
@@ -496,7 +726,7 @@ Ejecución del 4 de abril de 2026. Umbral ASR: 300 ms.
 | CP-A4 Divergencia reservas | ✅ PASS | < 1 ms | — | **< 1 ms** |
 | CP-A5 Failover | ✅ PASS | — | — | Failover activado |
 
-**Hipótesis H1: CONFIRMADA** — todos los tiempos de detección están entre **0 y 24 ms**, 10-300× por debajo del umbral de 300 ms.
+**Hipótesis H1: CONFIRMADA** — todos los tiempos de detección están entre **0 y 24 ms**, 10–300× por debajo del umbral de 300 ms.
 
 ### ASR-2 — Seguridad
 
@@ -571,64 +801,121 @@ Los resultados completos están en [`scripts/final_report.json`](scripts/final_r
 
 ## 10. Solución de problemas
 
-### El cluster Kind no existe
+### Modo local (Kind)
+
+#### El cluster Kind no existe
 
 ```bash
 kind create cluster --name ccp-experiment --config infra/kind-config.yaml
 ```
 
-### MongoDB no arranca o el RS no se inicializa
+#### MongoDB no arranca o el RS no se inicializa
 
 ```bash
-# Ver logs del job de init
 kubectl logs -n data job/mongodb-rs-init
 
-# Si el job expiró, eliminarlo y volver a aplicar
+# Si el job expiró, recrearlo
 kubectl delete job mongodb-rs-init -n data
 kubectl apply -f infra/mongodb-rs-init-job.yaml
 ```
 
-### El Monitor no arranca (consumer NATS ya existe)
+#### El Monitor no arranca (consumer NATS ya existe)
 
-Ocurre cuando hay dos pods del Monitor intentando usar el mismo consumer durable:
+Ocurre cuando hay dos pods intentando usar el mismo consumer durable:
 
 ```bash
-# Identificar el pod viejo
 kubectl get pods -n ccp | grep monitor
-
-# Eliminar el pod viejo forzosamente
 kubectl delete pod -n ccp <nombre-pod-viejo> --force --grace-period=0
 ```
 
-### Las imágenes no se encuentran en Kind (`ErrImageNeverPull`)
-
-Las imágenes deben cargarse al cluster después de cada `docker build`:
+#### Las imágenes no se encuentran en Kind (`ErrImageNeverPull`)
 
 ```bash
 kind load docker-image ccp/<servicio>:latest --name ccp-experiment
 kubectl rollout restart deployment/<servicio> -n ccp
 ```
 
-### Los port-forwards no responden
+#### Los port-forwards no responden
 
 ```bash
-# Verificar que los pods estén Running
-kubectl get pods -n ccp
-
-# Reiniciar los port-forwards manualmente
 pkill -f "kubectl port-forward"
 sleep 2
 kubectl port-forward -n ccp svc/modulo-inventarios 30090:8090 &
 # ... resto de servicios
 ```
 
-### Resetear el experimento completamente
+#### Resetear el experimento completamente
 
 ```bash
-# Eliminar el cluster y empezar desde cero
 kind delete cluster --name ccp-experiment
+DEPLOY_TARGET=local bash infra/deploy.sh
+```
 
-# Recrear todo
-kind create cluster --name ccp-experiment --config infra/kind-config.yaml
-bash infra/setup.sh
+---
+
+### Modo OCI (OKE)
+
+#### `ImagePullBackOff` — los pods no pueden descargar imágenes
+
+```bash
+kubectl describe pod <pod> -n ccp | grep -A 10 Events
+
+# Verificar que el secret existe
+kubectl get secret ocir-secret -n ccp
+
+# Recrear el secret
+bash infra/oci/imagepullsecret.sh
+
+# Verificar que la imagen existe en OCIR
+oci artifacts container image list --compartment-id "${OCI_COMPARTMENT_ID}" \
+  --repository-name ccp
+```
+
+#### PVC en `Pending` — MongoDB no arranca
+
+```bash
+# Verificar que la StorageClass existe
+kubectl get sc
+# Debe aparecer: oci-bv
+
+# Ver por qué el PVC no se asigna
+kubectl describe pvc -n data
+```
+
+#### Load Balancer sin IP externa
+
+La IP pública puede tardar 3-5 minutos en asignarse. Si no aparece después de 10 minutos:
+
+```bash
+kubectl describe svc modulo-inventarios -n ccp | grep -A 5 Events
+```
+
+Verificar en OCI Console → **Networking → Load Balancers** que no haya errores. El subnet del Load Balancer debe tener reglas de seguridad que permitan tráfico entrante en los puertos 8090 y 8094.
+
+#### `oci ce cluster create` falla por permisos
+
+```bash
+# Verificar políticas IAM del compartment
+oci iam policy list --compartment-id "${OCI_COMPARTMENT_ID}"
+
+# Verificar service limits
+oci limits value list --compartment-id "${OCI_COMPARTMENT_ID}" \
+  --service-name oke --query 'data[*].{name:name,value:value}'
+```
+
+#### t_deteccion > 300 ms en OKE
+
+Improbable pero puede ocurrir si los pods están en zonas de disponibilidad distintas. Verificar:
+
+```bash
+kubectl get pods -n ccp -o wide
+# Si los pods están en nodos de ADs distintos, verificar latencia con:
+kubectl exec -n ccp <pod-modulo-inventarios> -- curl -s http://nats.messaging.svc.cluster.local:4222
+```
+
+#### Teardown y recreación completa
+
+```bash
+bash infra/oci/teardown_oke.sh
+DEPLOY_TARGET=oci bash infra/deploy.sh
 ```

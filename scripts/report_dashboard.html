@@ -1,0 +1,218 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>CCP — Reporte de Validación ASR</title>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body { font-family: 'Segoe UI', system-ui, sans-serif; background: #0f172a; color: #e2e8f0; min-height: 100vh; padding: 2rem; }
+    h1 { font-size: 1.6rem; font-weight: 700; color: #f8fafc; margin-bottom: 0.25rem; }
+    .subtitle { color: #94a3b8; font-size: 0.875rem; margin-bottom: 2rem; }
+
+    .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 1rem; margin-bottom: 2rem; }
+    .card { background: #1e293b; border-radius: 12px; padding: 1.25rem 1.5rem; border: 1px solid #334155; }
+    .card .label { font-size: 0.75rem; text-transform: uppercase; letter-spacing: 0.05em; color: #64748b; margin-bottom: 0.4rem; }
+    .card .value { font-size: 2rem; font-weight: 700; }
+    .card .value.green { color: #4ade80; }
+    .card .value.blue  { color: #60a5fa; }
+    .card .value.yellow{ color: #facc15; }
+
+    .section { margin-bottom: 2rem; }
+    .section-title { font-size: 1rem; font-weight: 600; color: #cbd5e1; margin-bottom: 1rem; display: flex; align-items: center; gap: 0.5rem; }
+    .badge { padding: 0.2rem 0.6rem; border-radius: 999px; font-size: 0.7rem; font-weight: 600; }
+    .badge.pass { background: #14532d; color: #4ade80; }
+    .badge.fail { background: #450a0a; color: #f87171; }
+
+    table { width: 100%; border-collapse: collapse; background: #1e293b; border-radius: 12px; overflow: hidden; border: 1px solid #334155; }
+    th { background: #0f172a; padding: 0.75rem 1rem; text-align: left; font-size: 0.75rem; text-transform: uppercase; letter-spacing: 0.05em; color: #64748b; }
+    td { padding: 0.75rem 1rem; font-size: 0.875rem; border-top: 1px solid #1e293b; }
+    tr:hover td { background: #263148; }
+
+    .pill { display: inline-block; padding: 0.15rem 0.5rem; border-radius: 4px; font-size: 0.75rem; font-weight: 600; }
+    .pill.pass { background: #14532d; color: #4ade80; }
+    .pill.fail { background: #450a0a; color: #f87171; }
+
+    .bar-wrap { background: #0f172a; border-radius: 4px; height: 8px; width: 100%; max-width: 200px; overflow: hidden; }
+    .bar { height: 100%; border-radius: 4px; background: #4ade80; transition: width 0.5s; }
+    .bar.warn { background: #facc15; }
+    .bar.danger { background: #f87171; }
+
+    .codes { display: flex; flex-wrap: wrap; gap: 3px; }
+    .code { width: 16px; height: 16px; border-radius: 3px; font-size: 9px; display: flex; align-items: center; justify-content: center; font-weight: 700; }
+    .code.ok  { background: #14532d; color: #4ade80; }
+    .code.err { background: #450a0a; color: #f87171; }
+
+    .ts { color: #475569; font-size: 0.75rem; margin-top: 2rem; }
+
+    .hypothesis-banner { display: flex; gap: 1rem; margin-bottom: 2rem; flex-wrap: wrap; }
+    .hyp { flex: 1; min-width: 220px; background: #1e293b; border-radius: 12px; padding: 1.25rem 1.5rem; border: 1px solid #334155; display: flex; align-items: center; gap: 1rem; }
+    .hyp-icon { font-size: 2.5rem; }
+    .hyp-title { font-size: 0.85rem; font-weight: 700; color: #f8fafc; }
+    .hyp-sub   { font-size: 0.75rem; color: #94a3b8; margin-top: 0.2rem; }
+    .hyp.confirmed { border-color: #166534; }
+    .hyp.rejected  { border-color: #991b1b; }
+  </style>
+</head>
+<body>
+
+<h1>CCP — Reporte de Validación de ASRs</h1>
+<p class="subtitle" id="ts">Cargando...</p>
+
+<div class="grid" id="summary-cards"></div>
+
+<div class="hypothesis-banner" id="hyp-banners"></div>
+
+<div class="section">
+  <div class="section-title">
+    <span>Experimento A — ASR-1 Disponibilidad (HeartBeat + VALCOH)</span>
+    <span class="badge pass" id="asr1-badge"></span>
+  </div>
+  <table id="table-a">
+    <thead>
+      <tr>
+        <th>ID</th><th>Nombre</th><th>Estado</th>
+        <th>t_self_test</th><th>t_clasificacion</th><th>Detalles</th>
+      </tr>
+    </thead>
+    <tbody></tbody>
+  </table>
+</div>
+
+<div class="section">
+  <div class="section-title">
+    <span>Experimento B — ASR-2 Seguridad (CEP DDoS)</span>
+    <span class="badge pass" id="asr2-badge"></span>
+  </div>
+  <table id="table-b">
+    <thead>
+      <tr>
+        <th>ID</th><th>Nombre</th><th>Estado</th>
+        <th>t_deteccion</th><th>Threshold (300ms)</th><th>Respuestas HTTP</th>
+      </tr>
+    </thead>
+    <tbody></tbody>
+  </table>
+</div>
+
+<p class="ts" id="footer"></p>
+
+<script>
+async function loadReport() {
+  let data;
+  try {
+    const resp = await fetch('final_report.json');
+    data = await resp.json();
+  } catch(e) {
+    document.body.innerHTML += `<p style="color:#f87171;margin-top:2rem">
+      No se pudo cargar final_report.json. Abre este archivo desde la misma carpeta <code>scripts/</code>.<br>
+      Tip: <code>cd scripts && python3.11 -m http.server 8888</code> y abre <code>http://localhost:8888/report_dashboard.html</code>
+    </p>`;
+    return;
+  }
+
+  // Timestamp
+  const ts = new Date(data.timestamp).toLocaleString('es-CO');
+  document.getElementById('ts').textContent = `Generado: ${ts}`;
+  document.getElementById('footer').textContent = `Umbral ASR: ${data.threshold_ms} ms | ${ts}`;
+
+  // Summary cards
+  const cards = [
+    { label: 'Casos pasados', value: `${data.overall.passed}/${data.overall.total}`, cls: 'green' },
+    { label: 'Hipótesis H1', value: data.asr1.confirmed ? '✓ Confirmada' : '✗ Rechazada', cls: data.asr1.confirmed ? 'green' : 'red' },
+    { label: 'Hipótesis H2', value: data.asr2.confirmed ? '✓ Confirmada' : '✗ Rechazada', cls: data.asr2.confirmed ? 'green' : 'red' },
+    { label: 'Umbral', value: `${data.threshold_ms} ms`, cls: 'blue' },
+  ];
+  document.getElementById('summary-cards').innerHTML = cards.map(c => `
+    <div class="card">
+      <div class="label">${c.label}</div>
+      <div class="value ${c.cls}">${c.value}</div>
+    </div>`).join('');
+
+  // Hypothesis banners
+  const hyps = [
+    { id: 'H1', title: 'ASR-1 Disponibilidad', sub: 'HeartBeat + VALCOH detecta inconsistencias < 300ms', confirmed: data.asr1.confirmed },
+    { id: 'H2', title: 'ASR-2 Seguridad', sub: 'CEP detecta DDoS de capa de negocio < 300ms', confirmed: data.asr2.confirmed },
+  ];
+  document.getElementById('hyp-banners').innerHTML = hyps.map(h => `
+    <div class="hyp ${h.confirmed ? 'confirmed' : 'rejected'}">
+      <div class="hyp-icon">${h.confirmed ? '✅' : '❌'}</div>
+      <div>
+        <div class="hyp-title">${h.id} — ${h.title}</div>
+        <div class="hyp-sub">${h.sub}</div>
+        <div style="margin-top:0.4rem">
+          <span class="pill ${h.confirmed ? 'pass' : 'fail'}">${h.confirmed ? 'CONFIRMADA' : 'NO CONFIRMADA'}</span>
+        </div>
+      </div>
+    </div>`).join('');
+
+  // ASR1 badge
+  document.getElementById('asr1-badge').textContent = `${data.asr1.passed}/${data.asr1.total}`;
+  document.getElementById('asr1-badge').className = `badge ${data.asr1.confirmed ? 'pass' : 'fail'}`;
+
+  // Table A
+  const tbodyA = document.querySelector('#table-a tbody');
+  for (const c of data.asr1.cases) {
+    const t1 = c.t_self_test_ms;
+    const t2 = c.t_clasificacion_ms;
+    const barPct = t => t == null ? 0 : Math.min(100, (t / data.threshold_ms) * 100);
+    const barCls = t => t == null ? '' : t < 100 ? '' : t < 250 ? 'warn' : 'danger';
+    const fmt = t => t == null ? '—' : `${t.toFixed(3)} ms`;
+
+    let details = '';
+    if (c.tipo_ok !== undefined)         details += `tipo_ok=${c.tipo_ok} `;
+    if (c.stock_neg_detected !== undefined) details += `stock_neg=${c.stock_neg_detected} `;
+    if (c.concurrencia_detected !== undefined) details += `concurrencia=${c.concurrencia_detected} `;
+    if (c.divergencia_detected !== undefined) details += `divergencia=${c.divergencia_detected} `;
+    if (c.failover_monitor !== undefined)  details += `failover=${c.failover_monitor} `;
+
+    tbodyA.innerHTML += `<tr>
+      <td><strong>${c.id}</strong></td>
+      <td>${c.name}</td>
+      <td><span class="pill ${c.passed ? 'pass' : 'fail'}">${c.passed ? 'PASS' : 'FAIL'}</span></td>
+      <td>
+        ${fmt(t1)}<br>
+        <div class="bar-wrap"><div class="bar ${barCls(t1)}" style="width:${barPct(t1)}%"></div></div>
+      </td>
+      <td>
+        ${fmt(t2)}<br>
+        <div class="bar-wrap"><div class="bar ${barCls(t2)}" style="width:${barPct(t2)}%"></div></div>
+      </td>
+      <td style="color:#94a3b8;font-size:0.8rem">${details}</td>
+    </tr>`;
+  }
+
+  // ASR2 badge
+  document.getElementById('asr2-badge').textContent = `${data.asr2.passed}/${data.asr2.total}`;
+  document.getElementById('asr2-badge').className = `badge ${data.asr2.confirmed ? 'pass' : 'fail'}`;
+
+  // Table B
+  const tbodyB = document.querySelector('#table-b tbody');
+  for (const c of data.asr2.cases) {
+    const t = c.t_deteccion_ms ?? c.above_threshold?.t_deteccion_ms ?? null;
+    const barPct = t == null ? 0 : Math.min(100, (t / data.threshold_ms) * 100);
+    const codes = c.response_codes ?? c.above_threshold?.response_codes ?? [];
+
+    const codesHtml = codes.length
+      ? `<div class="codes">${codes.map(code =>
+          `<div class="code ${code === 200 ? 'ok' : 'err'}" title="${code}">${code === 200 ? '2' : '4'}</div>`
+        ).join('')}</div>`
+      : '—';
+
+    tbodyB.innerHTML += `<tr>
+      <td><strong>${c.id}</strong></td>
+      <td>${c.name}</td>
+      <td><span class="pill ${c.passed ? 'pass' : 'fail'}">${c.passed ? 'PASS' : 'FAIL'}</span></td>
+      <td>${t != null ? `${t.toFixed(3)} ms` : '—'}</td>
+      <td>
+        ${t != null ? `<div class="bar-wrap"><div class="bar" style="width:${barPct}%"></div></div><span style="font-size:0.75rem;color:#64748b">${barPct.toFixed(1)}% del umbral</span>` : '—'}
+      </td>
+      <td>${codesHtml}</td>
+    </tr>`;
+  }
+}
+
+loadReport();
+</script>
+</body>
+</html>

@@ -36,16 +36,16 @@ sleep 3
 echo "Port-forwards listos (PIDs: ${PF_PIDS[*]})"
 
 # Install dependencies if needed
-pip install -q httpx 2>/dev/null || true
+python3.11 -m pip install -q httpx 2>/dev/null || true
 
 echo ""
 echo "=== Ejecutando Experimento A (ASR-1 Disponibilidad) ==="
-python3 "$ROOT_DIR/experiments/experiment_a/run_experiment_a.py"
+python3.11 "$ROOT_DIR/experiments/experiment_a/run_experiment_a.py"
 
 echo ""
 echo "=== Ejecutando Experimento B (ASR-2 Seguridad) ==="
-python3 "$ROOT_DIR/experiments/experiment_b/run_experiment_b.py"
+python3.11 "$ROOT_DIR/experiments/experiment_b/run_experiment_b.py"
 
 echo ""
 echo "=== Generando Reporte Final ==="
-python3 "$ROOT_DIR/scripts/validate_asrs.py"
+python3.11 "$ROOT_DIR/scripts/validate_asrs.py"

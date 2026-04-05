@@ -307,21 +307,21 @@ def render():
         det_str   = f"{DIM}{detail[:26]}{RESET}"
         print(f"  {DIM}{ts}{RESET}  {label_str}  {tipo_str}  {det_str}")
 
-    print(f"\n{DIM}  Ctrl+C para salir  │  --demo para secuencia automática de fallas{RESET}")
+    print(f"\n{DIM}  Ctrl+C para salir  │  --demo (ASR-1 fallas)  │  --demo-asr2 (ASR-2 DDoS CEP){RESET}")
     print(f"{BOLD}{'═'*W}{RESET}")
 
 
 # ── Secuencia demo ────────────────────────────────────────────────────────────
 DEMO_STEPS = [
-    ("none",               10, "🟢 Estado normal — SELF_TEST_OK"),
-    ("stock_negativo",     12, "🔴 Inyectando stock negativo → VALCOH detecta → Corrector actúa"),
-    ("none",               8,  "🟢 Corregido — volviendo a OK"),
-    ("divergencia_reservas",12,"🟡 Inyectando divergencia de reservas → VALCOH detecta → Reconciliación"),
-    ("none",               8,  "🟢 Reconciliado"),
-    ("estado_concurrente", 10, "🟡 Inyectando estado concurrente → VALCOH detecta"),
-    ("none",               8,  "🟢 Corregido"),
-    ("self_test_failed",   12, "🔴 Inyectando fallo estructural → Monitor activa FAILOVER"),
-    ("none",               10, "🟢 Failover completado — standby activo"),
+    ("none",               10, "Estado normal — SELF_TEST_OK"),
+    ("stock_negativo",     12, "Inyectando stock negativo → VALCOH detecta → Corrector actúa"),
+    ("none",               8,  "Corregido — volviendo a OK"),
+    ("divergencia_reservas",12,"Inyectando divergencia de reservas → VALCOH detecta → Reconciliación"),
+    ("none",               8,  "Reconciliado"),
+    ("estado_concurrente", 10, "Inyectando estado concurrente → VALCOH detecta"),
+    ("none",               8,  "Corregido"),
+    ("self_test_failed",   12, "Inyectando fallo estructural → Monitor activa FAILOVER"),
+    ("none",               10, "Failover completado — standby activo"),
 ]
 
 def run_demo(inv_url):
@@ -345,13 +345,77 @@ def run_demo(inv_url):
             pass
         with _lock:
             STATS["fault_mode"] = "none"
-            _add_event(GREEN, "DEMO", "FIN", "Secuencia completada")
+            _add_event(GREEN, "DEMO", "FIN", "Secuencia ASR-1 completada")
+
+
+# ── Demo ASR-2 (DDoS CEP) ────────────────────────────────────────────────────
+DEMO_ASR2_STEPS = [
+    # (descripcion, actor_id, n_requests, sku, accion, jwt_valido, pausa_post)
+    ("Happy path — 5 req normales",        "demo_b1", 5,  "COCA-COLA-350", "reservar", True,  4),
+    ("DDoS gradual — 15 req mismo SKU",    "demo_b2", 15, "COCA-COLA-350", "reservar", False, 6),
+    ("Reset ventana CEP",                  None,      0,  "",              "",          True,  2),
+    ("DDoS con JWT valido — no bypass",    "demo_b3", 15, "COCA-COLA-350", "reservar", True,  6),
+    ("Reset ventana CEP",                  None,      0,  "",              "",          True,  2),
+    ("Umbral correlacion — 12 req (ataque)","demo_b4a",12,"COCA-COLA-350", "reservar", False, 4),
+    ("Reset ventana CEP",                  None,      0,  "",              "",          True,  2),
+    ("Umbral correlacion — 9 req (normal)","demo_b4b", 9, "COCA-COLA-350", "reservar", False, 4),
+]
+
+def run_demo_asr2(cep_url):
+    print(f"\n{BOLD}{MAGENTA}  ▶ Iniciando secuencia DEMO — validación en vivo de ASR-2 (CEP/DDoS){RESET}\n")
+    time.sleep(2)
+    with httpx.Client(timeout=5.0) as c:
+        for desc, actor_id, n_req, sku, accion, jwt_valido, pausa in DEMO_ASR2_STEPS:
+            with _lock:
+                _add_event(MAGENTA, "ASR2", actor_id or "reset", desc[:40])
+
+            # reset CEP window
+            if actor_id is None:
+                try:
+                    c.post(f"{cep_url}/reset")
+                    with _lock:
+                        _add_event(CYAN, "CEP", "reset", "ventana limpiada")
+                except Exception:
+                    pass
+                time.sleep(pausa)
+                continue
+
+            # enviar ráfaga
+            codes = []
+            for i in range(n_req):
+                if _stop.is_set():
+                    return
+                try:
+                    resp = c.post(
+                        f"{cep_url}/validar",
+                        json={"actor_id": actor_id, "sku": sku,
+                              "accion": accion, "jwt_valido": jwt_valido},
+                    )
+                    codes.append(resp.status_code)
+                    if resp.status_code == 429:
+                        with _lock:
+                            _add_event(RED, "CEP", "BLOQUEADO",
+                                       f"{actor_id} req {i+1} → 429")
+                except Exception as e:
+                    codes.append(None)
+
+            got_429 = any(c == 429 for c in codes if c is not None)
+            color = RED if got_429 else GREEN
+            summary = f"{'ATAQUE' if got_429 else 'OK'} {codes.count(429)}x429 / {n_req} req"
+            with _lock:
+                _add_event(color, "CEP", actor_id, summary)
+
+            time.sleep(pausa)
+
+        with _lock:
+            _add_event(GREEN, "ASR2", "FIN", "Secuencia ASR-2 completada")
 
 
 # ── Main ──────────────────────────────────────────────────────────────────────
 def main():
     parser = argparse.ArgumentParser()
-    parser.add_argument("--demo", action="store_true", help="Ejecutar secuencia de fallas automática")
+    parser.add_argument("--demo",      action="store_true", help="Ejecutar secuencia de fallas ASR-1 automática")
+    parser.add_argument("--demo-asr2", action="store_true", help="Ejecutar secuencia de ataques DDoS ASR-2 automática")
     parser.add_argument("--no-portforward", action="store_true", help="Omitir port-forwards (ya activos)")
     args = parser.parse_args()
 
@@ -370,6 +434,11 @@ def main():
         t_demo = threading.Thread(target=run_demo, args=(URLS["inv"],), daemon=True)
         time.sleep(3)
         t_demo.start()
+
+    if args.demo_asr2:
+        t_demo2 = threading.Thread(target=run_demo_asr2, args=(URLS["cep"],), daemon=True)
+        time.sleep(3)
+        t_demo2.start()
 
     try:
         while True:

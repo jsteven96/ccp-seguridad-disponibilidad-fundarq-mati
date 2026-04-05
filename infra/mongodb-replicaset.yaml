@@ -106,13 +106,18 @@ spec:
               HOST1="mongodb-1.mongodb-headless.data.svc.cluster.local:27017"
               echo "Esperando a mongodb-0..."
               until mongosh "mongodb://${HOST0}/admin" --eval "db.adminCommand('ping')" --quiet 2>/dev/null; do
-                sleep 3; echo "...ping"
+                sleep 3; echo "...ping mongodb-0"
               done
               echo "mongodb-0 listo."
+              echo "Esperando a mongodb-1..."
+              until mongosh "mongodb://${HOST1}/admin" --eval "db.adminCommand('ping')" --quiet 2>/dev/null; do
+                sleep 3; echo "...ping mongodb-1"
+              done
+              echo "mongodb-1 listo."
               mongosh "mongodb://${HOST0}/admin" --quiet --eval "
                 try {
-                  rs.status();
-                  print('RS ya existe');
+                  var s = rs.status();
+                  if (s.ok === 1) { print('RS ya existe'); }
                 } catch(e) {
                   rs.initiate({
                     _id: 'rs0',
@@ -124,7 +129,11 @@ spec:
                   print('RS iniciado');
                 }
               "
-              sleep 20
+              echo "Esperando a que el primary esté listo..."
+              until mongosh "mongodb://${HOST0}/admin?replicaSet=rs0" --eval "db.isMaster().ismaster" --quiet 2>/dev/null | grep -q true; do
+                sleep 2; echo "...esperando primary"
+              done
+              echo "Primary listo."
               mongosh "mongodb://${HOST0}/ccp" --quiet --eval "
                 db.inventario.drop();
                 db.inventario.insertMany([

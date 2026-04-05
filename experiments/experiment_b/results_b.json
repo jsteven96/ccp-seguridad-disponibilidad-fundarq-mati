@@ -2,7 +2,7 @@
   "experiment": "B",
   "asr": "ASR-2 Seguridad",
   "hypothesis": "H2",
-  "timestamp": "2026-04-04T08:47:43.475059",
+  "timestamp": "2026-04-05T14:56:03.057784",
   "threshold_ms": 300,
   "passed": 4,
   "total": 4,
@@ -28,7 +28,7 @@
       "any_429": true,
       "attack_in_logs": true,
       "actor_bloqueado": true,
-      "t_deteccion_ms": 0.011,
+      "t_deteccion_ms": 0.012,
       "response_codes": [
         200,
         200,
@@ -54,7 +54,7 @@
       "any_429": true,
       "attack_detected": true,
       "jwt_bypassed": false,
-      "t_deteccion_ms": 0.009,
+      "t_deteccion_ms": 0.01,
       "response_codes": [
         200,
         200,
@@ -82,7 +82,7 @@
         "requests": 12,
         "attack_detected": true,
         "any_429": true,
-        "t_deteccion_ms": 0.019
+        "t_deteccion_ms": 0.008
       },
       "below_threshold": {
         "actor": "safe_actor_b4b",

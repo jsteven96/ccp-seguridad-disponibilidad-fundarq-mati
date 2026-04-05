@@ -1,0 +1,26 @@
+# k8s/overlays/oci/patch-services-lb.yaml
+# Cambia NodePort → LoadBalancer para servicios con acceso externo
+# Solo modulo-inventarios y validacion-cep necesitan IP publica (los experimentos los invocan)
+apiVersion: v1
+kind: Service
+metadata:
+  name: modulo-inventarios
+  namespace: ccp
+spec:
+  type: LoadBalancer
+  ports:
+    - name: http
+      port: 8090
+      targetPort: 8090
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: validacion-cep
+  namespace: ccp
+spec:
+  type: LoadBalancer
+  ports:
+    - name: http
+      port: 8094
+      targetPort: 8094

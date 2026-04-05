@@ -1,0 +1,18 @@
+# infra/oci/mongodb-values-oci.yaml
+architecture: replicaset
+replicaCount: 2
+arbiter:
+  enabled: false
+auth:
+  rootPassword: "ccp-experiment-2024"
+  replicaSetKey: "ccp-rs-key"
+persistence:
+  size: 50Gi
+  storageClass: "oci-bv"
+resources:
+  requests:
+    cpu: 500m
+    memory: 1Gi
+  limits:
+    cpu: "1"
+    memory: 2Gi

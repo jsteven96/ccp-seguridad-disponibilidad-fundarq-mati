@@ -1,0 +1,12 @@
+# infra/oci/nats-values-oci.yaml
+config:
+  jetstream:
+    enabled: true
+    memStorage:
+      enabled: true
+      size: 256Mi
+    fileStorage:
+      enabled: true
+      size: 5Gi
+      storageDirectory: /data/jetstream
+      storageClassName: oci-bv

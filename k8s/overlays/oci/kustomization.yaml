@@ -1,0 +1,38 @@
+# k8s/overlays/oci/kustomization.yaml
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+resources:
+  - ../../modulo-inventarios.yaml
+  - ../../inv-standby.yaml
+  - ../../inv-standby-svc.yaml
+  - ../../monitor.yaml
+  - ../../corrector.yaml
+  - ../../validacion-cep.yaml
+  - ../../modulo-seguridad.yaml
+  - ../../log-auditoria.yaml
+
+images:
+  - name: ccp/modulo-inventarios
+    newName: ${OCI_REGION}.ocir.io/${OCI_TENANCY_NAMESPACE}/ccp/modulo-inventarios
+    newTag: latest
+  - name: ccp/monitor
+    newName: ${OCI_REGION}.ocir.io/${OCI_TENANCY_NAMESPACE}/ccp/monitor
+    newTag: latest
+  - name: ccp/corrector
+    newName: ${OCI_REGION}.ocir.io/${OCI_TENANCY_NAMESPACE}/ccp/corrector
+    newTag: latest
+  - name: ccp/validacion-cep
+    newName: ${OCI_REGION}.ocir.io/${OCI_TENANCY_NAMESPACE}/ccp/validacion-cep
+    newTag: latest
+  - name: ccp/modulo-seguridad
+    newName: ${OCI_REGION}.ocir.io/${OCI_TENANCY_NAMESPACE}/ccp/modulo-seguridad
+    newTag: latest
+  - name: ccp/log-auditoria
+    newName: ${OCI_REGION}.ocir.io/${OCI_TENANCY_NAMESPACE}/ccp/log-auditoria
+    newTag: latest
+
+patches:
+  - path: patch-imagepull.yaml
+  - path: patch-services-lb.yaml
+  - path: patch-remove-nodeselector.yaml

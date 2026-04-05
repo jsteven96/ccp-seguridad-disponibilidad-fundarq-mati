@@ -1,0 +1,99 @@
+# k8s/overlays/oci/patch-imagepull.yaml
+# Agrega imagePullSecrets y cambia imagePullPolicy a Always en todos los Deployments
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: modulo-inventarios
+  namespace: ccp
+spec:
+  template:
+    spec:
+      imagePullSecrets:
+        - name: ocir-secret
+      containers:
+        - name: modulo-inventarios
+          imagePullPolicy: Always
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: inv-standby
+  namespace: ccp
+spec:
+  template:
+    spec:
+      imagePullSecrets:
+        - name: ocir-secret
+      containers:
+        - name: inv-standby
+          imagePullPolicy: Always
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: monitor
+  namespace: ccp
+spec:
+  template:
+    spec:
+      imagePullSecrets:
+        - name: ocir-secret
+      containers:
+        - name: monitor
+          imagePullPolicy: Always
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: corrector
+  namespace: ccp
+spec:
+  template:
+    spec:
+      imagePullSecrets:
+        - name: ocir-secret
+      containers:
+        - name: corrector
+          imagePullPolicy: Always
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: validacion-cep
+  namespace: ccp
+spec:
+  template:
+    spec:
+      imagePullSecrets:
+        - name: ocir-secret
+      containers:
+        - name: validacion-cep
+          imagePullPolicy: Always
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: modulo-seguridad
+  namespace: ccp
+spec:
+  template:
+    spec:
+      imagePullSecrets:
+        - name: ocir-secret
+      containers:
+        - name: modulo-seguridad
+          imagePullPolicy: Always
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: log-auditoria
+  namespace: ccp
+spec:
+  template:
+    spec:
+      imagePullSecrets:
+        - name: ocir-secret
+      containers:
+        - name: log-auditoria
+          imagePullPolicy: Always

@@ -1,0 +1,22 @@
+# k8s/overlays/oci/patch-remove-nodeselector.yaml
+# Remueve nodeSelector de los Deployments que lo tienen (primary/standby)
+# En OKE no etiquetamos nodos manualmente; el scheduler de K8s distribuye los pods
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: modulo-inventarios
+  namespace: ccp
+spec:
+  template:
+    spec:
+      nodeSelector: null
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: inv-standby
+  namespace: ccp
+spec:
+  template:
+    spec:
+      nodeSelector: null

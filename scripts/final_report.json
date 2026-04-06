@@ -1,5 +1,5 @@
 {
-  "timestamp": "2026-04-04T08:47:43.531498",
+  "timestamp": "2026-04-05T14:56:03.109032",
   "threshold_ms": 300,
   "asr1": {
     "hypothesis": "H1",
@@ -12,9 +12,9 @@
         "name": "Happy path (SELF_TEST_OK)",
         "passed": true,
         "tipo_ok": true,
-        "t_self_test_ms": 4.011167000498972,
-        "t_clasificacion_ms": 0.158,
-        "t_total_ms": 4.169167000498972
+        "t_self_test_ms": 3.0195829999684065,
+        "t_clasificacion_ms": 0.062,
+        "t_total_ms": 3.0815829999684063
       },
       {
         "id": "CP-A2",
@@ -22,21 +22,21 @@
         "passed": true,
         "stock_neg_detected": true,
         "corrector_event": true,
-        "t_self_test_ms": 23.93616699919221
+        "t_self_test_ms": 4.008540999620891
       },
       {
         "id": "CP-A3",
         "name": "Concurrencia detectada",
         "passed": true,
         "concurrencia_detected": true,
-        "t_self_test_ms": 0.001958000211743638
+        "t_self_test_ms": 0.002249999852210749
       },
       {
         "id": "CP-A4",
         "name": "Divergencia de reservas",
         "passed": true,
         "divergencia_detected": true,
-        "t_self_test_ms": 0.001333999534836039
+        "t_self_test_ms": 0.00199999976757681
       },
       {
         "id": "CP-A5",
@@ -74,7 +74,7 @@
         "any_429": true,
         "attack_in_logs": true,
         "actor_bloqueado": true,
-        "t_deteccion_ms": 0.011,
+        "t_deteccion_ms": 0.012,
         "response_codes": [
           200,
           200,
@@ -100,7 +100,7 @@
         "any_429": true,
         "attack_detected": true,
         "jwt_bypassed": false,
-        "t_deteccion_ms": 0.009,
+        "t_deteccion_ms": 0.01,
         "response_codes": [
           200,
           200,
@@ -128,7 +128,7 @@
           "requests": 12,
           "attack_detected": true,
           "any_429": true,
-          "t_deteccion_ms": 0.019
+          "t_deteccion_ms": 0.008
         },
         "below_threshold": {
           "actor": "safe_actor_b4b",

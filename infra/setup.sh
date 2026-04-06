@@ -46,11 +46,13 @@ fi
 
 # --- 5. MongoDB ---
 echo ""
-echo ">>> [5/6] Instalando MongoDB Replica Set via Helm..."
-if helm status mongodb -n data &>/dev/null; then
+echo ">>> [5/6] Instalando MongoDB Replica Set via manifiestos..."
+if kubectl get statefulset mongodb -n data &>/dev/null; then
   echo "    MongoDB ya instalado, omitiendo."
 else
-  helm install mongodb bitnami/mongodb -n data -f "$INFRA_DIR/mongodb-values.yaml" --wait --timeout 5m
+  kubectl apply -f "$INFRA_DIR/mongodb-replicaset.yaml"
+  echo "    Esperando a que mongodb-0 esté listo..."
+  kubectl wait pod/mongodb-0 -n data --for=condition=Ready --timeout=120s
   echo "    MongoDB instalado."
 fi
 

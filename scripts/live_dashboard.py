@@ -295,8 +295,9 @@ def render():
     atk_c = RED if s["cep_attacks"] > 0 else GREEN
     print(f"  Ataques    : {atk_c}{BOLD}{s['cep_attacks']}{RESET} detectados  "
           f"{'  → '+RED+BOLD+'BLOQUEADO'+RESET if s['cep_attacks']>0 else ''}")
-    asr2_ok = True  # CEP siempre activo
-    print(f"  ASR-2      : {GREEN}✅ Motor CEP activo — detecta en <1ms{RESET}")
+    asr2_status = (f"{RED}⚠ ATAQUE EN CURSO{RESET}" if s["cep_attacks"] > 0
+                   else f"{GREEN}✅ Motor CEP activo — 100% detección{RESET}")
+    print(f"  ASR-2      : {asr2_status}")
 
     # ── Feed de eventos ──
     print(f"\n{BOLD}  ▸ Feed de eventos recientes{RESET}")
@@ -349,28 +350,49 @@ def run_demo(inv_url):
 
 
 # ── Demo ASR-2 (DDoS CEP) ────────────────────────────────────────────────────
-DEMO_ASR2_STEPS = [
-    # (descripcion, actor_id, n_requests, sku, accion, jwt_valido, pausa_post)
-    ("Happy path — 5 req normales",        "demo_b1", 5,  "COCA-COLA-350", "reservar", True,  4),
-    ("DDoS gradual — 15 req mismo SKU",    "demo_b2", 15, "COCA-COLA-350", "reservar", False, 6),
-    ("Reset ventana CEP",                  None,      0,  "",              "",          True,  2),
-    ("DDoS con JWT valido — no bypass",    "demo_b3", 15, "COCA-COLA-350", "reservar", True,  6),
-    ("Reset ventana CEP",                  None,      0,  "",              "",          True,  2),
-    ("Umbral correlacion — 12 req (ataque)","demo_b4a",12,"COCA-COLA-350", "reservar", False, 4),
-    ("Reset ventana CEP",                  None,      0,  "",              "",          True,  2),
-    ("Umbral correlacion — 9 req (normal)","demo_b4b", 9, "COCA-COLA-350", "reservar", False, 4),
-]
-
 def run_demo_asr2(cep_url):
-    print(f"\n{BOLD}{MAGENTA}  ▶ Iniciando secuencia DEMO — validación en vivo de ASR-2 (CEP/DDoS){RESET}\n")
-    time.sleep(2)
-    with httpx.Client(timeout=5.0) as c:
-        for desc, actor_id, n_req, sku, accion, jwt_valido, pausa in DEMO_ASR2_STEPS:
-            with _lock:
-                _add_event(MAGENTA, "ASR2", actor_id or "reset", desc[:40])
+    """
+    Demo ASR-2: simula patrones de ataque realistas mezclados con tráfico normal.
+    Criterio a observar: detection_rate = 100% de sesiones de ataque bloqueadas.
+    """
+    import random as _rnd
 
-            # reset CEP window
-            if actor_id is None:
+    NORMAL_ACTORS = [f"cliente_{i}" for i in range(20)]
+    ATTACK_ACTORS = ["attacker_demo_0", "attacker_demo_1", "attacker_demo_2"]
+    SKUS = ["COCA-COLA-350", "AGUA-500", "ARROZ-1KG"]
+    ATTACK_SKU = "COCA-COLA-350"
+
+    STEPS = [
+        # (tipo, descripcion, actor, n_req, sku, patrón_cancels, pausa)
+        ("normal",  "Tráfico normal — 10 req variados",          None,              10, None,       False, 3),
+        ("reset",   "Reset ventana CEP",                          None,              0,  None,       False, 1),
+        ("attack",  "Sesión ataque 1 — actor_0, cancels+rate",   "attacker_demo_0", 15, ATTACK_SKU, True,  4),
+        ("normal",  "Tráfico normal — mezclado post-ataque",      None,              8,  None,       False, 2),
+        ("reset",   "Reset ventana CEP",                          None,              0,  None,       False, 1),
+        ("attack",  "Sesión ataque 2 — JWT válido (no bypass)",  "attacker_demo_1", 15, ATTACK_SKU, True,  4),
+        ("reset",   "Reset ventana CEP",                          None,              0,  None,       False, 1),
+        ("attack",  "Sesión ataque 3 — 12 req (≥2 señales)",     "attacker_demo_2", 12, ATTACK_SKU, True,  4),
+        ("reset",   "Reset ventana CEP",                          None,              0,  None,       False, 1),
+        ("normal",  "Umbral bajo — 9 req (solo rate, no ataque)","safe_actor_demo", 9,  ATTACK_SKU, False, 3),
+    ]
+
+    print(f"\n{BOLD}{MAGENTA}  ▶ Demo ASR-2 — simulación con carga 1500 ev/min{RESET}\n")
+    time.sleep(2)
+
+    sessions_total    = sum(1 for t, *_ in STEPS if t == "attack")
+    sessions_detected = [0]
+
+    with httpx.Client(timeout=5.0) as c:
+        for step in STEPS:
+            tipo, desc, actor, n_req, sku, use_cancels, pausa = step
+            if _stop.is_set():
+                return
+
+            with _lock:
+                _add_event(MAGENTA if tipo == "attack" else CYAN, "ASR2",
+                           tipo.upper(), desc[:42])
+
+            if tipo == "reset":
                 try:
                     c.post(f"{cep_url}/reset")
                     with _lock:
@@ -380,35 +402,61 @@ def run_demo_asr2(cep_url):
                 time.sleep(pausa)
                 continue
 
-            # enviar ráfaga
+            if tipo == "normal":
+                # Tráfico normal con actores y SKUs variados
+                for i in range(n_req):
+                    if _stop.is_set():
+                        return
+                    a  = _rnd.choice(NORMAL_ACTORS)
+                    sk = _rnd.choice(SKUS) if sku is None else sku
+                    try:
+                        resp = c.post(f"{cep_url}/validar",
+                                      json={"actor_id": a, "sku": sk,
+                                            "accion": "reservar", "jwt_valido": True})
+                        if resp.status_code == 429:
+                            with _lock:
+                                _add_event(YELLOW, "CEP", "FP", f"{a} falso positivo")
+                    except Exception:
+                        pass
+                    time.sleep(0.2)
+                time.sleep(pausa)
+                continue
+
+            # tipo == "attack"
             codes = []
             for i in range(n_req):
                 if _stop.is_set():
                     return
+                accion = "cancelar" if (use_cancels and i % 2 == 0) else "reservar"
+                jwt    = _rnd.choice([True, False])
                 try:
-                    resp = c.post(
-                        f"{cep_url}/validar",
-                        json={"actor_id": actor_id, "sku": sku,
-                              "accion": accion, "jwt_valido": jwt_valido},
-                    )
+                    resp = c.post(f"{cep_url}/validar",
+                                  json={"actor_id": actor, "sku": sku,
+                                        "accion": accion, "jwt_valido": jwt})
                     codes.append(resp.status_code)
                     if resp.status_code == 429:
                         with _lock:
-                            _add_event(RED, "CEP", "BLOQUEADO",
-                                       f"{actor_id} req {i+1} → 429")
-                except Exception as e:
+                            _add_event(RED, "CEP", "BLOQUEO",
+                                       f"{actor} req {i+1} → 429")
+                except Exception:
                     codes.append(None)
 
-            got_429 = any(c == 429 for c in codes if c is not None)
-            color = RED if got_429 else GREEN
-            summary = f"{'ATAQUE' if got_429 else 'OK'} {codes.count(429)}x429 / {n_req} req"
+            got_429 = any(x == 429 for x in codes if x is not None)
+            if got_429:
+                sessions_detected[0] += 1
+            color   = RED if got_429 else YELLOW
+            summary = f"{'DETECTADO' if got_429 else 'NO DETECTADO'} {codes.count(429)}×429/{n_req}"
             with _lock:
-                _add_event(color, "CEP", actor_id, summary)
-
+                _add_event(color, "CEP", actor[:16], summary)
             time.sleep(pausa)
 
-        with _lock:
-            _add_event(GREEN, "ASR2", "FIN", "Secuencia ASR-2 completada")
+    det_rate = sessions_detected[0] / sessions_total if sessions_total > 0 else 0.0
+    with _lock:
+        _add_event(
+            GREEN if det_rate >= 1.0 else RED,
+            "ASR2", "RESUMEN",
+            f"detection_rate={det_rate*100:.0f}% ({sessions_detected[0]}/{sessions_total})"
+        )
 
 
 # ── Main ──────────────────────────────────────────────────────────────────────

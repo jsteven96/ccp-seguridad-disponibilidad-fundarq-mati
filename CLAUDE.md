@@ -26,11 +26,12 @@ El repositorio contiene:
 - **Resultado**: 0.001–23.9 ms (10×–3000× por debajo del umbral)
 
 ### ASR-2 — Seguridad
-**Hipótesis H2**: El motor CEP detecta un ataque DDoS de capa de negocio en menos de 300 ms usando correlación de señales, sin exponer criterios de detección al atacante.
+**Hipótesis H2**: El motor CEP detecta el 100% de los ataques DDoS de capa de negocio (operación normal: 25 req/s, 1000 usuarios concurrentes, 1500 órdenes/min) sin exponer criterios de detección al atacante.
 
 - **Táctica**: CEP con ventana deslizante de 60 s, 3 señales correlacionadas, umbral ≥ 2 = ataque; respuesta enmascarada HTTP 429
-- **Umbral**: < 300 ms desde primera señal hasta bloqueo
-- **Resultado**: 0.009–0.019 ms
+- **Criterio**: detection_rate == 100% (el tiempo de detección ya no es la métrica principal)
+- **Simulación**: proceso de Poisson λ=25 req/s, 30% tráfico de ataque, 70% tráfico normal
+- **Resultado**: pendiente re-ejecución bajo nueva simulación estocástica
 
 ---
 
@@ -175,22 +176,26 @@ Si ≥ 2 señales activas → ataque confirmado → HTTP 429 (mensaje genérico,
 
 ### Experimento A — ASR-1 Disponibilidad
 
-| ID | Nombre | Mecanismo | Criterio | Resultado |
-|---|---|---|---|---|
-| CP-A1 | Happy path (SELF_TEST_OK) | VALCOH pasa los 3 checks | tipo=SELF_TEST_OK, t_self_test < 300 ms | ✅ 4 ms |
-| CP-A2 | Stock negativo detectado | fault-inject stock_negativo | tipo=STOCK_NEGATIVO + evento corrector | ✅ 23.9 ms |
-| CP-A3 | Concurrencia detectada | fault-inject estado_concurrente | tipo=ESTADO_CONCURRENTE detectado | ✅ 0.002 ms |
-| CP-A4 | Divergencia de reservas | fault-inject divergencia_reservas | tipo=DIVERGENCIA_RESERVAS detectado | ✅ 0.001 ms |
-| CP-A5 | Self-test fallido → failover | fault-inject self_test_failed | Monitor activa failover + INV-Standby responde | ✅ |
+Simulación: proceso de Poisson λ=25 req/s durante 60s (~1500 eventos). Errores: 10% del total (stock_negativo=4%, divergencia_reservas=3%, estado_concurrente=2%, self_test_failed=1%).
+
+| ID | Nombre | Mecanismo | Criterio |
+|---|---|---|---|
+| CP-A1 | Happy path (SELF_TEST_OK) | VALCOH pasa los 3 checks | tipo=SELF_TEST_OK, t_self_test < 300 ms |
+| CP-A2 | Simulación estocástica 1500 ev/min | Carga mixta Poisson + fault injection por tipo | detection_rate ≥ 95% y t_self_test_max < 300 ms |
+| CP-A3 | Concurrencia detectada | fault-inject estado_concurrente | tipo=ESTADO_CONCURRENTE, t_self_test < 300 ms |
+| CP-A4 | Divergencia de reservas | fault-inject divergencia_reservas | tipo=DIVERGENCIA_RESERVAS, t_self_test < 300 ms |
+| CP-A5 | Self-test fallido → failover | fault-inject self_test_failed | Monitor activa failover + INV-Standby responde |
 
 ### Experimento B — ASR-2 Seguridad
 
-| ID | Nombre | Patrón de ataque | Criterio | Resultado |
-|---|---|---|---|---|
-| CP-B1 | Happy path (sin ataque) | 5 requests normales | 0 falsos positivos, 5×200 | ✅ |
-| CP-B2 | DDoS gradual detectado | 15 requests rápidos mismo SKU | any_429=true, actor bloqueado, t_deteccion < 300 ms | ✅ 0.011 ms |
-| CP-B3 | DDoS con JWT válido (no bypass) | 15 requests con token válido | JWT no bypasea CEP; 429 igualmente | ✅ 0.009 ms |
-| CP-B4 | Umbral de correlación exacto | 12 req (≥2 señales) vs 9 req (1 señal) | 12 → ataque; 9 → no falso positivo | ✅ 0.019 ms |
+Simulación: proceso de Poisson λ=25 req/s durante 60s (~1500 eventos). 30% son patrones de ataque (mismo actor, mismo SKU, cancelaciones alternas). Criterio: detection_rate == 100%.
+
+| ID | Nombre | Patrón | Criterio |
+|---|---|---|---|
+| CP-B1 | Happy path (sin ataque) | 30 req normales espaciadas en 30s | 0 falsos positivos |
+| CP-B2 | Simulación estocástica 1500 ev/min | 30% ataques en bursts + 70% tráfico normal | detection_rate == 100% |
+| CP-B3 | Ataque con JWT válido | Burst 15 req, jwt_valido=True | JWT no bypasea CEP; any_429=true |
+| CP-B4 | Umbral de correlación | 12 req (≥2 señales) vs 9 req (1 señal) | 12 → 429; 9 → no falso positivo |
 
 ---
 

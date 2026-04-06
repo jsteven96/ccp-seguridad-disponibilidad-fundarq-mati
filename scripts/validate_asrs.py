@@ -89,26 +89,33 @@ def render_case_a(case: dict) -> str:
 
 def render_case_b(case: dict) -> str:
     """Format a single ASR-2 test case line."""
-    cid = case.get("id", "?")
-    name = case.get("name", "")
+    cid    = case.get("id", "?")
+    name   = case.get("name", "")
     passed = case.get("passed", False)
-    icon = status_icon(passed)
-
-    label = f"{cid} {name}"
+    icon   = status_icon(passed)
+    label  = f"{cid} {name}"
 
     if cid == "CP-B1":
-        fp = case.get("false_positives", 0)
-        timing = f"sin falsos positivos ({fp})"
-    else:
-        # Nested structure for CP-B4
+        fp     = case.get("false_positives", 0)
+        detail = f"falsos_positivos={fp}"
+    elif cid == "CP-B2":
+        sim  = case.get("simulation", {})
+        rate = case.get("detection_rate", sim.get("detection_rate"))
+        rate_str = f"{rate*100:.1f}%" if rate is not None else "N/A"
+        detail = (f"detection_rate={rate_str}  "
+                  f"sesiones={sim.get('attack_sessions','?')}  "
+                  f"detectadas={sim.get('sessions_detected','?')}")
+    elif cid == "CP-B3":
+        detail = f"jwt_bypassed=False  any_429={case.get('any_429')}"
+    elif cid == "CP-B4":
         above = case.get("above_threshold", {})
-        t_det_raw = (
-            case.get("t_deteccion_ms")
-            or above.get("t_deteccion_ms")
-        )
-        timing = f"t_deteccion={fmt_ms(t_det_raw)}"
+        below = case.get("below_threshold", {})
+        detail = (f"above_429={above.get('any_429')}  "
+                  f"below_no_fp={below.get('no_false_positive')}")
+    else:
+        detail = ""
 
-    return f"  {icon}  {label:<36} {timing}"
+    return f"  {icon}  {label:<44} {detail}"
 
 
 def print_report(data_a: dict | None, data_b: dict | None) -> dict:
@@ -160,7 +167,7 @@ def print_report(data_a: dict | None, data_b: dict | None) -> dict:
     h2_icon = status_icon(h2_confirmed)
     h2_status = "CONFIRMADA" if h2_confirmed else "NO CONFIRMADA"
     print()
-    print(f"Hipótesis H2: {h2_icon} {h2_status} — todos los CP-B < {THRESHOLD_MS}ms")
+    print(f"Hipótesis H2: {h2_icon} {h2_status} — CEP detecta el 100% de los ataques")
 
     # --- Final summary ---
     total_passed = passed_a + passed_b

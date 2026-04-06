@@ -1,10 +1,10 @@
 {
-  "timestamp": "2026-04-05T14:56:03.109032",
+  "timestamp": "2026-04-05T22:56:12.626636",
   "threshold_ms": 300,
   "asr1": {
     "hypothesis": "H1",
-    "confirmed": true,
-    "passed": 5,
+    "confirmed": false,
+    "passed": 4,
     "total": 5,
     "cases": [
       {
@@ -12,31 +12,107 @@
         "name": "Happy path (SELF_TEST_OK)",
         "passed": true,
         "tipo_ok": true,
-        "t_self_test_ms": 3.0195829999684065,
-        "t_clasificacion_ms": 0.062,
-        "t_total_ms": 3.0815829999684063
+        "t_self_test_ms": 3.3664160000626,
+        "t_clasificacion_ms": 0.048,
+        "t_total_ms": 3.4144160000626
       },
       {
         "id": "CP-A2",
-        "name": "Stock negativo detectado",
-        "passed": true,
-        "stock_neg_detected": true,
-        "corrector_event": true,
-        "t_self_test_ms": 4.008540999620891
+        "name": "Simulación estocástica 1500 eventos/min",
+        "passed": false,
+        "simulation": {
+          "total_events": 1454,
+          "lambda_per_s": 25.0,
+          "normal_sent": 1301,
+          "errors_injected": 9,
+          "errors_detected": 6,
+          "detection_rate": 0.6666666666666666,
+          "t_self_test_max_ms": 0.022333002561936155,
+          "t_self_test_avg_ms": 0.005048834282206371,
+          "detections": [
+            {
+              "fault_type": "divergencia_reservas",
+              "expected_tipo": "DIVERGENCIA_RESERVAS",
+              "detected": true,
+              "t_self_test_ms": 0.001667001924943179,
+              "within_threshold": true
+            },
+            {
+              "fault_type": "stock_negativo",
+              "expected_tipo": "STOCK_NEGATIVO",
+              "detected": false,
+              "t_self_test_ms": null,
+              "within_threshold": false
+            },
+            {
+              "fault_type": "stock_negativo",
+              "expected_tipo": "STOCK_NEGATIVO",
+              "detected": false,
+              "t_self_test_ms": null,
+              "within_threshold": false
+            },
+            {
+              "fault_type": "divergencia_reservas",
+              "expected_tipo": "DIVERGENCIA_RESERVAS",
+              "detected": true,
+              "t_self_test_ms": 0.022333002561936155,
+              "within_threshold": true
+            },
+            {
+              "fault_type": "stock_negativo",
+              "expected_tipo": "STOCK_NEGATIVO",
+              "detected": false,
+              "t_self_test_ms": null,
+              "within_threshold": false
+            },
+            {
+              "fault_type": "self_test_failed",
+              "expected_tipo": "SELF_TEST_FAILED",
+              "detected": true,
+              "t_self_test_ms": 0.0010420008038636297,
+              "within_threshold": true
+            },
+            {
+              "fault_type": "divergencia_reservas",
+              "expected_tipo": "DIVERGENCIA_RESERVAS",
+              "detected": true,
+              "t_self_test_ms": 0.0014170000213198364,
+              "within_threshold": true
+            },
+            {
+              "fault_type": "estado_concurrente",
+              "expected_tipo": "ESTADO_CONCURRENTE",
+              "detected": true,
+              "t_self_test_ms": 0.0019170001905877143,
+              "within_threshold": true
+            },
+            {
+              "fault_type": "estado_concurrente",
+              "expected_tipo": "ESTADO_CONCURRENTE",
+              "detected": true,
+              "t_self_test_ms": 0.0019170001905877143,
+              "within_threshold": true
+            }
+          ]
+        },
+        "detection_rate": 0.6666666666666666,
+        "t_self_test_max_ms": 0.022333002561936155,
+        "t_self_test_avg_ms": 0.005048834282206371,
+        "timing_ok": true
       },
       {
         "id": "CP-A3",
-        "name": "Concurrencia detectada",
+        "name": "Estado concurrente detectado",
         "passed": true,
-        "concurrencia_detected": true,
-        "t_self_test_ms": 0.002249999852210749
+        "detected": true,
+        "t_self_test_ms": 0.002750002749962732
       },
       {
         "id": "CP-A4",
         "name": "Divergencia de reservas",
         "passed": true,
-        "divergencia_detected": true,
-        "t_self_test_ms": 0.00199999976757681
+        "detected": true,
+        "t_self_test_ms": 0.002624998160172254
       },
       {
         "id": "CP-A5",
@@ -56,61 +132,280 @@
     "cases": [
       {
         "id": "CP-B1",
-        "name": "Happy path (sin ataque)",
+        "name": "Happy path — sin falsos positivos",
         "passed": true,
+        "requests_sent": 30,
+        "false_positives": 0,
         "response_codes": [
+          200,
+          200,
+          200,
+          200,
+          200,
+          200,
+          200,
+          200,
+          200,
+          200,
+          200,
+          200,
+          200,
+          200,
+          200,
+          200,
+          200,
+          200,
+          200,
+          200,
+          200,
+          200,
+          200,
+          200,
+          200,
           200,
           200,
           200,
           200,
           200
-        ],
-        "false_positives": 0
-      },
-      {
-        "id": "CP-B2",
-        "name": "DDoS gradual detectado",
-        "passed": true,
-        "any_429": true,
-        "attack_in_logs": true,
-        "actor_bloqueado": true,
-        "t_deteccion_ms": 0.012,
-        "response_codes": [
-          200,
-          200,
-          200,
-          200,
-          200,
-          200,
-          200,
-          200,
-          200,
-          200,
-          429,
-          429,
-          429,
-          429,
-          429
         ]
       },
       {
+        "id": "CP-B2",
+        "name": "Simulación estocástica 1500 eventos/min — detección 100%",
+        "passed": true,
+        "simulation": {
+          "total_events": 1464,
+          "lambda_per_s": 25.0,
+          "normal_sent": 1025,
+          "attack_sessions": 29,
+          "sessions_detected": 29,
+          "detection_rate": 1.0,
+          "false_positives": 0,
+          "sessions": [
+            {
+              "session_id": 0,
+              "actor_id": "attacker_0",
+              "requests": 15,
+              "detected": true,
+              "responses_429": 10
+            },
+            {
+              "session_id": 1,
+              "actor_id": "attacker_1",
+              "requests": 15,
+              "detected": true,
+              "responses_429": 10
+            },
+            {
+              "session_id": 2,
+              "actor_id": "attacker_2",
+              "requests": 15,
+              "detected": true,
+              "responses_429": 10
+            },
+            {
+              "session_id": 3,
+              "actor_id": "attacker_3",
+              "requests": 15,
+              "detected": true,
+              "responses_429": 10
+            },
+            {
+              "session_id": 4,
+              "actor_id": "attacker_4",
+              "requests": 15,
+              "detected": true,
+              "responses_429": 10
+            },
+            {
+              "session_id": 5,
+              "actor_id": "attacker_5",
+              "requests": 15,
+              "detected": true,
+              "responses_429": 10
+            },
+            {
+              "session_id": 6,
+              "actor_id": "attacker_6",
+              "requests": 15,
+              "detected": true,
+              "responses_429": 10
+            },
+            {
+              "session_id": 7,
+              "actor_id": "attacker_7",
+              "requests": 15,
+              "detected": true,
+              "responses_429": 10
+            },
+            {
+              "session_id": 8,
+              "actor_id": "attacker_8",
+              "requests": 15,
+              "detected": true,
+              "responses_429": 10
+            },
+            {
+              "session_id": 9,
+              "actor_id": "attacker_9",
+              "requests": 15,
+              "detected": true,
+              "responses_429": 10
+            },
+            {
+              "session_id": 10,
+              "actor_id": "attacker_0",
+              "requests": 15,
+              "detected": true,
+              "responses_429": 15
+            },
+            {
+              "session_id": 11,
+              "actor_id": "attacker_1",
+              "requests": 15,
+              "detected": true,
+              "responses_429": 15
+            },
+            {
+              "session_id": 12,
+              "actor_id": "attacker_2",
+              "requests": 15,
+              "detected": true,
+              "responses_429": 15
+            },
+            {
+              "session_id": 13,
+              "actor_id": "attacker_3",
+              "requests": 15,
+              "detected": true,
+              "responses_429": 15
+            },
+            {
+              "session_id": 14,
+              "actor_id": "attacker_4",
+              "requests": 15,
+              "detected": true,
+              "responses_429": 15
+            },
+            {
+              "session_id": 15,
+              "actor_id": "attacker_5",
+              "requests": 15,
+              "detected": true,
+              "responses_429": 15
+            },
+            {
+              "session_id": 16,
+              "actor_id": "attacker_6",
+              "requests": 15,
+              "detected": true,
+              "responses_429": 15
+            },
+            {
+              "session_id": 17,
+              "actor_id": "attacker_7",
+              "requests": 15,
+              "detected": true,
+              "responses_429": 15
+            },
+            {
+              "session_id": 18,
+              "actor_id": "attacker_8",
+              "requests": 15,
+              "detected": true,
+              "responses_429": 15
+            },
+            {
+              "session_id": 19,
+              "actor_id": "attacker_9",
+              "requests": 15,
+              "detected": true,
+              "responses_429": 15
+            },
+            {
+              "session_id": 20,
+              "actor_id": "attacker_0",
+              "requests": 15,
+              "detected": true,
+              "responses_429": 15
+            },
+            {
+              "session_id": 21,
+              "actor_id": "attacker_1",
+              "requests": 15,
+              "detected": true,
+              "responses_429": 15
+            },
+            {
+              "session_id": 22,
+              "actor_id": "attacker_2",
+              "requests": 15,
+              "detected": true,
+              "responses_429": 15
+            },
+            {
+              "session_id": 23,
+              "actor_id": "attacker_3",
+              "requests": 15,
+              "detected": true,
+              "responses_429": 15
+            },
+            {
+              "session_id": 24,
+              "actor_id": "attacker_4",
+              "requests": 15,
+              "detected": true,
+              "responses_429": 15
+            },
+            {
+              "session_id": 25,
+              "actor_id": "attacker_5",
+              "requests": 15,
+              "detected": true,
+              "responses_429": 15
+            },
+            {
+              "session_id": 26,
+              "actor_id": "attacker_6",
+              "requests": 15,
+              "detected": true,
+              "responses_429": 15
+            },
+            {
+              "session_id": 27,
+              "actor_id": "attacker_7",
+              "requests": 15,
+              "detected": true,
+              "responses_429": 15
+            },
+            {
+              "session_id": 28,
+              "actor_id": "attacker_8",
+              "requests": 19,
+              "detected": true,
+              "responses_429": 19
+            }
+          ]
+        },
+        "detection_rate": 1.0,
+        "false_positives": 0
+      },
+      {
         "id": "CP-B3",
-        "name": "DDoS con JWT válido (no bypass)",
+        "name": "JWT válido no bypasea CEP",
         "passed": true,
         "any_429": true,
-        "attack_detected": true,
         "jwt_bypassed": false,
-        "t_deteccion_ms": 0.01,
         "response_codes": [
+          429,
           200,
+          429,
           200,
+          429,
           200,
+          429,
           200,
-          200,
-          200,
-          200,
-          200,
-          200,
+          429,
           200,
           429,
           429,
@@ -121,17 +416,27 @@
       },
       {
         "id": "CP-B4",
-        "name": "Umbral de correlación (exactamente 2 señales)",
+        "name": "Umbral de correlación (≥2 señales)",
         "passed": true,
         "above_threshold": {
-          "actor": "attacker_threshold_b4a",
           "requests": 12,
-          "attack_detected": true,
           "any_429": true,
-          "t_deteccion_ms": 0.008
+          "response_codes": [
+            429,
+            200,
+            429,
+            200,
+            429,
+            200,
+            429,
+            200,
+            429,
+            200,
+            429,
+            429
+          ]
         },
         "below_threshold": {
-          "actor": "safe_actor_b4b",
           "requests": 9,
           "any_429": false,
           "no_false_positive": true
@@ -140,8 +445,8 @@
     ]
   },
   "overall": {
-    "passed": 9,
+    "passed": 8,
     "total": 9,
-    "all_passed": true
+    "all_passed": false
   }
 }

@@ -1,5 +1,5 @@
 {
-  "timestamp": "2026-04-05T22:56:12.626636",
+  "timestamp": "2026-04-06T13:16:21.905675",
   "threshold_ms": 300,
   "asr1": {
     "hypothesis": "H1",
@@ -12,92 +12,92 @@
         "name": "Happy path (SELF_TEST_OK)",
         "passed": true,
         "tipo_ok": true,
-        "t_self_test_ms": 3.3664160000626,
-        "t_clasificacion_ms": 0.048,
-        "t_total_ms": 3.4144160000626
+        "t_self_test_ms": 2.3813340012566186,
+        "t_clasificacion_ms": 0.036,
+        "t_total_ms": 2.4173340012566187
       },
       {
         "id": "CP-A2",
         "name": "Simulación estocástica 1500 eventos/min",
         "passed": false,
         "simulation": {
-          "total_events": 1454,
+          "total_events": 1591,
           "lambda_per_s": 25.0,
-          "normal_sent": 1301,
+          "normal_sent": 1432,
           "errors_injected": 9,
-          "errors_detected": 6,
-          "detection_rate": 0.6666666666666666,
-          "t_self_test_max_ms": 0.022333002561936155,
-          "t_self_test_avg_ms": 0.005048834282206371,
+          "errors_detected": 3,
+          "detection_rate": 0.3333333333333333,
+          "t_self_test_max_ms": 3.2122920019901358,
+          "t_self_test_avg_ms": 2.687104165185398,
           "detections": [
             {
-              "fault_type": "divergencia_reservas",
-              "expected_tipo": "DIVERGENCIA_RESERVAS",
-              "detected": true,
-              "t_self_test_ms": 0.001667001924943179,
+              "fault_type": "stock_negativo",
+              "expected_tipo": "STOCK_NEGATIVO",
+              "detected": false,
+              "t_self_test_ms": 2.6788749964907765,
               "within_threshold": true
-            },
-            {
-              "fault_type": "stock_negativo",
-              "expected_tipo": "STOCK_NEGATIVO",
-              "detected": false,
-              "t_self_test_ms": null,
-              "within_threshold": false
-            },
-            {
-              "fault_type": "stock_negativo",
-              "expected_tipo": "STOCK_NEGATIVO",
-              "detected": false,
-              "t_self_test_ms": null,
-              "within_threshold": false
-            },
-            {
-              "fault_type": "divergencia_reservas",
-              "expected_tipo": "DIVERGENCIA_RESERVAS",
-              "detected": true,
-              "t_self_test_ms": 0.022333002561936155,
-              "within_threshold": true
-            },
-            {
-              "fault_type": "stock_negativo",
-              "expected_tipo": "STOCK_NEGATIVO",
-              "detected": false,
-              "t_self_test_ms": null,
-              "within_threshold": false
             },
             {
               "fault_type": "self_test_failed",
               "expected_tipo": "SELF_TEST_FAILED",
-              "detected": true,
-              "t_self_test_ms": 0.0010420008038636297,
-              "within_threshold": true
+              "detected": false,
+              "t_self_test_ms": null,
+              "within_threshold": false
             },
             {
               "fault_type": "divergencia_reservas",
               "expected_tipo": "DIVERGENCIA_RESERVAS",
-              "detected": true,
-              "t_self_test_ms": 0.0014170000213198364,
+              "detected": false,
+              "t_self_test_ms": null,
+              "within_threshold": false
+            },
+            {
+              "fault_type": "stock_negativo",
+              "expected_tipo": "STOCK_NEGATIVO",
+              "detected": false,
+              "t_self_test_ms": 2.4309169966727495,
               "within_threshold": true
             },
             {
               "fault_type": "estado_concurrente",
               "expected_tipo": "ESTADO_CONCURRENTE",
-              "detected": true,
-              "t_self_test_ms": 0.0019170001905877143,
+              "detected": false,
+              "t_self_test_ms": null,
+              "within_threshold": false
+            },
+            {
+              "fault_type": "stock_negativo",
+              "expected_tipo": "STOCK_NEGATIVO",
+              "detected": false,
+              "t_self_test_ms": 3.1020829992485233,
               "within_threshold": true
             },
             {
-              "fault_type": "estado_concurrente",
-              "expected_tipo": "ESTADO_CONCURRENTE",
+              "fault_type": "stock_negativo",
+              "expected_tipo": "STOCK_NEGATIVO",
               "detected": true,
-              "t_self_test_ms": 0.0019170001905877143,
+              "t_self_test_ms": 2.0522499980870634,
+              "within_threshold": true
+            },
+            {
+              "fault_type": "stock_negativo",
+              "expected_tipo": "STOCK_NEGATIVO",
+              "detected": true,
+              "t_self_test_ms": 3.2122920019901358,
+              "within_threshold": true
+            },
+            {
+              "fault_type": "stock_negativo",
+              "expected_tipo": "STOCK_NEGATIVO",
+              "detected": true,
+              "t_self_test_ms": 2.64620799862314,
               "within_threshold": true
             }
           ]
         },
-        "detection_rate": 0.6666666666666666,
-        "t_self_test_max_ms": 0.022333002561936155,
-        "t_self_test_avg_ms": 0.005048834282206371,
+        "detection_rate": 0.3333333333333333,
+        "t_self_test_max_ms": 3.2122920019901358,
+        "t_self_test_avg_ms": 2.687104165185398,
         "timing_ok": true
       },
       {
@@ -105,14 +105,14 @@
         "name": "Estado concurrente detectado",
         "passed": true,
         "detected": true,
-        "t_self_test_ms": 0.002750002749962732
+        "t_self_test_ms": 0.0015830009942874312
       },
       {
         "id": "CP-A4",
         "name": "Divergencia de reservas",
         "passed": true,
         "detected": true,
-        "t_self_test_ms": 0.002624998160172254
+        "t_self_test_ms": 0.0012920063454657793
       },
       {
         "id": "CP-A5",
@@ -174,11 +174,11 @@
         "name": "Simulación estocástica 1500 eventos/min — detección 100%",
         "passed": true,
         "simulation": {
-          "total_events": 1464,
+          "total_events": 1519,
           "lambda_per_s": 25.0,
-          "normal_sent": 1025,
-          "attack_sessions": 29,
-          "sessions_detected": 29,
+          "normal_sent": 1064,
+          "attack_sessions": 30,
+          "sessions_detected": 30,
           "detection_rate": 1.0,
           "false_positives": 0,
           "sessions": [
@@ -381,9 +381,16 @@
             {
               "session_id": 28,
               "actor_id": "attacker_8",
-              "requests": 19,
+              "requests": 15,
               "detected": true,
-              "responses_429": 19
+              "responses_429": 15
+            },
+            {
+              "session_id": 29,
+              "actor_id": "attacker_9",
+              "requests": 20,
+              "detected": true,
+              "responses_429": 20
             }
           ]
         },

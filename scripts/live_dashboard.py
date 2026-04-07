@@ -291,6 +291,10 @@ def render():
     print(f"  {'─'*66}")
     print(f"  Ventana CEP: {s['cep_window']} eventos (últimos 60s)")
     sigs = s["cep_last_signals"]
+    # last_signals ahora tiene forma {"actor": {...}, "global": {...}} tras el rediseño per-actor.
+    # El dashboard muestra las señales per-actor (las que determinan el ataque concentrado).
+    if isinstance(sigs, dict) and "actor" in sigs:
+        sigs = sigs["actor"]
     print(f"  Señales    : {_signals_str(sigs)}")
     atk_c = RED if s["cep_attacks"] > 0 else GREEN
     print(f"  Ataques    : {atk_c}{BOLD}{s['cep_attacks']}{RESET} detectados  "

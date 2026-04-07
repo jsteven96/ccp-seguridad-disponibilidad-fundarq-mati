@@ -2,7 +2,7 @@
   "experiment": "B",
   "asr": "ASR-2 Seguridad",
   "hypothesis": "H2",
-  "timestamp": "2026-04-05T22:56:12.566357",
+  "timestamp": "2026-04-06T13:16:21.815907",
   "criterion": "detection_rate == 100%",
   "simulation_config": {
     "duration_s": 60,
@@ -60,11 +60,11 @@
       "name": "Simulación estocástica 1500 eventos/min — detección 100%",
       "passed": true,
       "simulation": {
-        "total_events": 1464,
+        "total_events": 1519,
         "lambda_per_s": 25.0,
-        "normal_sent": 1025,
-        "attack_sessions": 29,
-        "sessions_detected": 29,
+        "normal_sent": 1064,
+        "attack_sessions": 30,
+        "sessions_detected": 30,
         "detection_rate": 1.0,
         "false_positives": 0,
         "sessions": [
@@ -267,9 +267,16 @@
           {
             "session_id": 28,
             "actor_id": "attacker_8",
-            "requests": 19,
+            "requests": 15,
             "detected": true,
-            "responses_429": 19
+            "responses_429": 15
+          },
+          {
+            "session_id": 29,
+            "actor_id": "attacker_9",
+            "requests": 20,
+            "detected": true,
+            "responses_429": 20
           }
         ]
       },

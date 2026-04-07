@@ -52,6 +52,30 @@
     .hyp-sub   { font-size: 0.75rem; color: #94a3b8; margin-top: 0.2rem; }
     .hyp.confirmed { border-color: #166534; }
     .hyp.rejected  { border-color: #991b1b; }
+
+    /* Extended report */
+    .divider { border: none; border-top: 1px solid #334155; margin: 2.5rem 0; }
+    .ext-header { margin-bottom: 1.5rem; }
+    .ext-header h2 { font-size: 1.2rem; font-weight: 700; color: #f8fafc; }
+    .ext-header p  { font-size: 0.8rem; color: #64748b; margin-top: 0.25rem; }
+    .ext-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 1rem; margin-bottom: 2rem; }
+    .ext-card { background: #1e293b; border-radius: 10px; padding: 1rem 1.25rem; border: 1px solid #334155; }
+    .ext-card .label { font-size: 0.7rem; text-transform: uppercase; letter-spacing: 0.05em; color: #64748b; margin-bottom: 0.3rem; }
+    .ext-card .value { font-size: 1.5rem; font-weight: 700; }
+    .ext-card .value.green  { color: #4ade80; }
+    .ext-card .value.yellow { color: #facc15; }
+    .ext-card .value.red    { color: #f87171; }
+    .ext-card .value.blue   { color: #60a5fa; }
+
+    .iter-table { width: 100%; border-collapse: collapse; background: #1e293b; border-radius: 12px; overflow: hidden; border: 1px solid #334155; margin-bottom: 1.5rem; }
+    .iter-table th { background: #0f172a; padding: 0.6rem 1rem; text-align: left; font-size: 0.7rem; text-transform: uppercase; letter-spacing: 0.05em; color: #64748b; }
+    .iter-table td { padding: 0.6rem 1rem; font-size: 0.8rem; border-top: 1px solid #0f172a; }
+    .iter-table tr:hover td { background: #263148; }
+    .progress-ring { display: flex; align-items: center; gap: 0.5rem; }
+    .mini-bar-wrap { background: #0f172a; border-radius: 4px; height: 6px; width: 80px; overflow: hidden; flex-shrink: 0; }
+    .mini-bar { height: 100%; border-radius: 4px; background: #4ade80; }
+    .mini-bar.warn   { background: #facc15; }
+    .mini-bar.danger { background: #f87171; }
   </style>
 </head>
 <body>
@@ -88,7 +112,7 @@
     <thead>
       <tr>
         <th>ID</th><th>Nombre</th><th>Estado</th>
-        <th>t_deteccion</th><th>Threshold (300ms)</th><th>Respuestas HTTP</th>
+        <th>Métrica principal</th><th>Detalle</th><th>Respuestas HTTP</th>
       </tr>
     </thead>
     <tbody></tbody>
@@ -96,6 +120,50 @@
 </div>
 
 <p class="ts" id="footer"></p>
+
+<!-- ══ REPORTE EXTENDIDO ══════════════════════════════════════════════════ -->
+<hr class="divider" />
+
+<div class="ext-header">
+  <h2>Experimentos Paralelos Extendidos</h2>
+  <p id="ext-meta">Cargando extended_report.json…</p>
+</div>
+
+<div class="grid ext-grid" id="ext-summary-cards"></div>
+
+<div class="hypothesis-banner" id="ext-hyp-banners"></div>
+
+<div class="section">
+  <div class="section-title">
+    ASR-1 — Disponibilidad: iteraciones extendidas
+    <span class="badge" id="ext-asr1-badge"></span>
+  </div>
+  <table class="iter-table" id="ext-table-a">
+    <thead>
+      <tr>
+        <th>#</th><th>Timestamp</th><th>Duración</th>
+        <th>Casos pasados</th><th>Progreso</th><th>t_self_test max</th>
+      </tr>
+    </thead>
+    <tbody></tbody>
+  </table>
+</div>
+
+<div class="section">
+  <div class="section-title">
+    ASR-2 — Seguridad: iteraciones extendidas
+    <span class="badge" id="ext-asr2-badge"></span>
+  </div>
+  <table class="iter-table" id="ext-table-b">
+    <thead>
+      <tr>
+        <th>#</th><th>Timestamp</th><th>Duración</th>
+        <th>Casos pasados</th><th>Progreso</th><th>CP-B2 detection_rate</th>
+      </tr>
+    </thead>
+    <tbody></tbody>
+  </table>
+</div>
 
 <script>
 async function loadReport() {
@@ -131,8 +199,8 @@ async function loadReport() {
 
   // Hypothesis banners
   const hyps = [
-    { id: 'H1', title: 'ASR-1 Disponibilidad', sub: 'HeartBeat + VALCOH detecta inconsistencias < 300ms', confirmed: data.asr1.confirmed },
-    { id: 'H2', title: 'ASR-2 Seguridad', sub: 'CEP detecta DDoS de capa de negocio < 300ms', confirmed: data.asr2.confirmed },
+    { id: 'H1', title: 'ASR-1 Disponibilidad', sub: 'HeartBeat + VALCOH detecta inconsistencias en < 300ms', confirmed: data.asr1.confirmed },
+    { id: 'H2', title: 'ASR-2 Seguridad', sub: 'CEP detecta el 100% de los ataques DDoS de capa de negocio', confirmed: data.asr2.confirmed },
   ];
   document.getElementById('hyp-banners').innerHTML = hyps.map(h => `
     <div class="hyp ${h.confirmed ? 'confirmed' : 'rejected'}">
@@ -160,11 +228,15 @@ async function loadReport() {
     const fmt = t => t == null ? '—' : `${t.toFixed(3)} ms`;
 
     let details = '';
-    if (c.tipo_ok !== undefined)         details += `tipo_ok=${c.tipo_ok} `;
-    if (c.stock_neg_detected !== undefined) details += `stock_neg=${c.stock_neg_detected} `;
-    if (c.concurrencia_detected !== undefined) details += `concurrencia=${c.concurrencia_detected} `;
-    if (c.divergencia_detected !== undefined) details += `divergencia=${c.divergencia_detected} `;
-    if (c.failover_monitor !== undefined)  details += `failover=${c.failover_monitor} `;
+    if (c.tipo_ok !== undefined)           details += `tipo_ok=${c.tipo_ok} `;
+    if (c.detected !== undefined)          details += `detected=${c.detected} `;
+    if (c.failover_monitor !== undefined)  details += `failover_monitor=${c.failover_monitor} `;
+    if (c.simulation != null) {
+      const sim = c.simulation;
+      details += `inyectados=${sim.errors_injected} detectados=${sim.errors_detected} `
+               + `detection_rate=${(sim.detection_rate*100).toFixed(1)}% `
+               + `t_max=${sim.t_self_test_max_ms != null ? sim.t_self_test_max_ms.toFixed(3)+'ms' : '—'}`;
+    }
 
     tbodyA.innerHTML += `<tr>
       <td><strong>${c.id}</strong></td>
@@ -186,33 +258,179 @@ async function loadReport() {
   document.getElementById('asr2-badge').textContent = `${data.asr2.passed}/${data.asr2.total}`;
   document.getElementById('asr2-badge').className = `badge ${data.asr2.confirmed ? 'pass' : 'fail'}`;
 
-  // Table B
+  // Table B — métricas por caso según CLAUDE.md
   const tbodyB = document.querySelector('#table-b tbody');
   for (const c of data.asr2.cases) {
-    const t = c.t_deteccion_ms ?? c.above_threshold?.t_deteccion_ms ?? null;
-    const barPct = t == null ? 0 : Math.min(100, (t / data.threshold_ms) * 100);
     const codes = c.response_codes ?? c.above_threshold?.response_codes ?? [];
-
     const codesHtml = codes.length
       ? `<div class="codes">${codes.map(code =>
           `<div class="code ${code === 200 ? 'ok' : 'err'}" title="${code}">${code === 200 ? '2' : '4'}</div>`
         ).join('')}</div>`
       : '—';
 
+    // Métrica principal y detalle varían por caso
+    let metrica = '—', detalle = '—';
+    if (c.id === 'CP-B1') {
+      const fp = c.false_positives ?? 0;
+      metrica = `<span style="color:${fp===0?'#4ade80':'#f87171'};font-weight:600">${fp} falsos positivos</span>`;
+      detalle = `${c.requests_sent ?? '—'} req normales`;
+    } else if (c.id === 'CP-B2') {
+      const sim = c.simulation ?? {};
+      const dr  = c.detection_rate ?? sim.detection_rate;
+      const drPct = dr != null ? (dr * 100).toFixed(1) : '—';
+      const drColor = dr >= 1 ? '#4ade80' : '#f87171';
+      metrica = `<span style="color:${drColor};font-weight:700">${drPct}% detection rate</span>`;
+      detalle = `${sim.sessions_detected ?? '—'}/${sim.attack_sessions ?? '—'} sesiones  FP=${sim.false_positives ?? '—'}`;
+    } else if (c.id === 'CP-B3') {
+      const bypassed = !c.any_429;
+      metrica = `<span style="color:${c.any_429?'#4ade80':'#f87171'};font-weight:600">JWT bypass: ${bypassed ? 'SÍ ❌' : 'NO ✅'}</span>`;
+      detalle = `any_429=${c.any_429}`;
+    } else if (c.id === 'CP-B4') {
+      const above = c.above_threshold ?? {};
+      const below = c.below_threshold ?? {};
+      metrica = `<span style="color:${above.any_429?'#4ade80':'#f87171'}">≥2 señales → ${above.any_429?'429 ✅':'no 429 ❌'}</span>`;
+      detalle  = `1 señal → ${below.any_429 ? 'FP ❌' : 'sin FP ✅'}`;
+    }
+
     tbodyB.innerHTML += `<tr>
       <td><strong>${c.id}</strong></td>
       <td>${c.name}</td>
       <td><span class="pill ${c.passed ? 'pass' : 'fail'}">${c.passed ? 'PASS' : 'FAIL'}</span></td>
-      <td>${t != null ? `${t.toFixed(3)} ms` : '—'}</td>
-      <td>
-        ${t != null ? `<div class="bar-wrap"><div class="bar" style="width:${barPct}%"></div></div><span style="font-size:0.75rem;color:#64748b">${barPct.toFixed(1)}% del umbral</span>` : '—'}
-      </td>
+      <td>${metrica}</td>
+      <td style="color:#94a3b8;font-size:0.8rem">${detalle}</td>
       <td>${codesHtml}</td>
     </tr>`;
   }
 }
 
 loadReport();
+
+// ── Reporte extendido ─────────────────────────────────────────────────────
+async function loadExtendedReport() {
+  let ext;
+  try {
+    const resp = await fetch('extended_report.json');
+    ext = await resp.json();
+  } catch(e) {
+    document.getElementById('ext-meta').textContent =
+      'extended_report.json no encontrado. Ejecuta run_extended_parallel.sh para generarlo.';
+    document.getElementById('ext-meta').style.color = '#f87171';
+    return;
+  }
+
+  // Meta
+  const ts = new Date(ext.meta.timestamp).toLocaleString('es-CO');
+  const dur = (ext.meta.duration_configured_s / 60).toFixed(0);
+  const wall = (ext.meta.wall_elapsed_s / 60).toFixed(1);
+  document.getElementById('ext-meta').textContent =
+    `Generado: ${ts}  |  Duración configurada: ${dur} min  |  Tiempo real: ${wall} min`;
+
+  const agg1 = ext.asr1.aggregate;
+  const agg2 = ext.asr2.aggregate;
+
+  // Summary cards
+  const pct1 = (agg1.iter_pass_rate * 100).toFixed(0);
+  const pct2 = (agg2.iter_pass_rate * 100).toFixed(0);
+  const dr   = agg2.detection_rate_avg != null
+    ? (agg2.detection_rate_avg * 100).toFixed(1) + '%' : 'N/A';
+  const tmax = agg1.t_max_ms != null ? agg1.t_max_ms.toFixed(3) + ' ms' : 'N/A';
+
+  const extCards = [
+    { label: 'ASR-1 iter. pasadas',   value: `${agg1.passing_iterations}/${agg1.iterations}`, cls: agg1.iter_pass_rate === 1 ? 'green' : agg1.iter_pass_rate >= 0.5 ? 'yellow' : 'red' },
+    { label: 'ASR-1 casos pasados',   value: `${agg1.passing_cases}/${agg1.total_cases_run}`, cls: 'blue' },
+    { label: 'ASR-1 t_self_test max', value: tmax, cls: agg1.t_max_ms < 300 ? 'green' : 'red' },
+    { label: 'ASR-2 iter. pasadas',   value: `${agg2.passing_iterations}/${agg2.iterations}`, cls: agg2.iter_pass_rate === 1 ? 'green' : agg2.iter_pass_rate >= 0.5 ? 'yellow' : 'red' },
+    { label: 'ASR-2 detection avg',   value: dr, cls: agg2.detection_rate_avg >= 1 ? 'green' : 'red' },
+    { label: 'CP-B2 runs 100%',       value: agg2.detection_rate_100pct != null ? `${agg2.detection_rate_100pct}/${agg2.cp_b2_runs}` : 'N/A', cls: 'blue' },
+  ];
+  document.getElementById('ext-summary-cards').innerHTML = extCards.map(c => `
+    <div class="ext-card">
+      <div class="label">${c.label}</div>
+      <div class="value ${c.cls}">${c.value}</div>
+    </div>`).join('');
+
+  // Hypothesis banners
+  document.getElementById('ext-hyp-banners').innerHTML = [
+    { id: 'H1', title: 'ASR-1 Disponibilidad', sub: `${agg1.iterations} iteraciones | t_max=${tmax}`, confirmed: ext.overall.h1_confirmed },
+    { id: 'H2', title: 'ASR-2 Seguridad',      sub: `${agg2.iterations} iteraciones | detection_avg=${dr}`, confirmed: ext.overall.h2_confirmed },
+  ].map(h => `
+    <div class="hyp ${h.confirmed ? 'confirmed' : 'rejected'}">
+      <div class="hyp-icon">${h.confirmed ? '✅' : '❌'}</div>
+      <div>
+        <div class="hyp-title">${h.id} — ${h.title}</div>
+        <div class="hyp-sub">${h.sub}</div>
+        <div style="margin-top:0.4rem">
+          <span class="pill ${h.confirmed ? 'pass' : 'fail'}">${h.confirmed ? 'CONFIRMADA' : 'NO CONFIRMADA'}</span>
+        </div>
+      </div>
+    </div>`).join('');
+
+  // ASR-1 badge & table
+  const badge1 = document.getElementById('ext-asr1-badge');
+  badge1.textContent = `${agg1.passing_iterations}/${agg1.iterations} iter`;
+  badge1.className   = `badge ${ext.overall.h1_confirmed ? 'pass' : 'fail'}`;
+
+  const tbodyA = document.querySelector('#ext-table-a tbody');
+  for (const it of ext.asr1.iterations) {
+    const pct  = it.total > 0 ? (it.passed / it.total) * 100 : 0;
+    const cls  = pct === 100 ? '' : pct >= 60 ? 'warn' : 'danger';
+    // t_self_test max for this iteration (from CP-A2 simulation or individual cases)
+    let tMs = null;
+    for (const c of it.cases) {
+      const t = c.t_self_test_ms ?? c.simulation?.t_self_test_max_ms ?? null;
+      if (t != null && (tMs === null || t > tMs)) tMs = t;
+    }
+    const tStr   = tMs != null ? `${tMs.toFixed(3)} ms` : '—';
+    const tColor = tMs != null && tMs < 300 ? '#4ade80' : tMs != null ? '#f87171' : '#64748b';
+    const ts2    = new Date(it.timestamp).toLocaleTimeString('es-CO');
+    tbodyA.innerHTML += `<tr>
+      <td><strong>${it.iteration}</strong></td>
+      <td style="color:#64748b">${ts2}</td>
+      <td>${it.elapsed_s.toFixed(0)}s</td>
+      <td><span class="pill ${it.all_passed ? 'pass' : 'fail'}">${it.passed}/${it.total}</span></td>
+      <td>
+        <div class="progress-ring">
+          <div class="mini-bar-wrap"><div class="mini-bar ${cls}" style="width:${pct}%"></div></div>
+          <span style="font-size:0.75rem;color:#94a3b8">${pct.toFixed(0)}%</span>
+        </div>
+      </td>
+      <td style="color:${tColor};font-weight:600">${tStr}</td>
+    </tr>`;
+  }
+
+  // ASR-2 badge & table
+  const badge2 = document.getElementById('ext-asr2-badge');
+  badge2.textContent = `${agg2.passing_iterations}/${agg2.iterations} iter`;
+  badge2.className   = `badge ${ext.overall.h2_confirmed ? 'pass' : 'fail'}`;
+
+  const tbodyB = document.querySelector('#ext-table-b tbody');
+  for (const it of ext.asr2.iterations) {
+    const pct  = it.total > 0 ? (it.passed / it.total) * 100 : 0;
+    const cls  = pct === 100 ? '' : pct >= 60 ? 'warn' : 'danger';
+    const b2   = it.cases.find(c => c.id === 'CP-B2');
+    const drIt = b2?.detection_rate;
+    const drStr  = drIt != null ? `${(drIt * 100).toFixed(1)}%` : '—';
+    const drColor = drIt != null && drIt >= 1 ? '#4ade80' : drIt != null ? '#f87171' : '#64748b';
+    const fp     = b2?.simulation?.false_positives ?? b2?.false_positives ?? null;
+    const fpStr  = fp != null ? ` (FP: ${fp})` : '';
+    const ts2    = new Date(it.timestamp).toLocaleTimeString('es-CO');
+    tbodyB.innerHTML += `<tr>
+      <td><strong>${it.iteration}</strong></td>
+      <td style="color:#64748b">${ts2}</td>
+      <td>${it.elapsed_s.toFixed(0)}s</td>
+      <td><span class="pill ${it.all_passed ? 'pass' : 'fail'}">${it.passed}/${it.total}</span></td>
+      <td>
+        <div class="progress-ring">
+          <div class="mini-bar-wrap"><div class="mini-bar ${cls}" style="width:${pct}%"></div></div>
+          <span style="font-size:0.75rem;color:#94a3b8">${pct.toFixed(0)}%</span>
+        </div>
+      </td>
+      <td style="color:${drColor};font-weight:600">${drStr}<span style="color:#64748b;font-weight:400">${fpStr}</span></td>
+    </tr>`;
+  }
+}
+
+loadExtendedReport();
 </script>
 </body>
 </html>

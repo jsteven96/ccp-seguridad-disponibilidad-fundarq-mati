@@ -2,42 +2,129 @@
   "experiment": "A",
   "asr": "ASR-1 Disponibilidad",
   "hypothesis": "H1",
-  "timestamp": "2026-04-05T14:55:37.862504",
+  "timestamp": "2026-04-06T13:14:46.169887",
   "threshold_ms": 300,
-  "passed": 5,
+  "simulation_config": {
+    "duration_s": 60,
+    "lambda_per_s": 25.0,
+    "target_events": 1500,
+    "error_distribution": {
+      "stock_negativo": 0.04,
+      "divergencia_reservas": 0.03,
+      "estado_concurrente": 0.02,
+      "self_test_failed": 0.01
+    }
+  },
+  "passed": 4,
   "total": 5,
-  "h1_confirmed": true,
+  "h1_confirmed": false,
   "cases": [
     {
       "id": "CP-A1",
       "name": "Happy path (SELF_TEST_OK)",
       "passed": true,
       "tipo_ok": true,
-      "t_self_test_ms": 3.0195829999684065,
-      "t_clasificacion_ms": 0.062,
-      "t_total_ms": 3.0815829999684063
+      "t_self_test_ms": 2.3813340012566186,
+      "t_clasificacion_ms": 0.036,
+      "t_total_ms": 2.4173340012566187
     },
     {
       "id": "CP-A2",
-      "name": "Stock negativo detectado",
-      "passed": true,
-      "stock_neg_detected": true,
-      "corrector_event": true,
-      "t_self_test_ms": 4.008540999620891
+      "name": "Simulación estocástica 1500 eventos/min",
+      "passed": false,
+      "simulation": {
+        "total_events": 1591,
+        "lambda_per_s": 25.0,
+        "normal_sent": 1432,
+        "errors_injected": 9,
+        "errors_detected": 3,
+        "detection_rate": 0.3333333333333333,
+        "t_self_test_max_ms": 3.2122920019901358,
+        "t_self_test_avg_ms": 2.687104165185398,
+        "detections": [
+          {
+            "fault_type": "stock_negativo",
+            "expected_tipo": "STOCK_NEGATIVO",
+            "detected": false,
+            "t_self_test_ms": 2.6788749964907765,
+            "within_threshold": true
+          },
+          {
+            "fault_type": "self_test_failed",
+            "expected_tipo": "SELF_TEST_FAILED",
+            "detected": false,
+            "t_self_test_ms": null,
+            "within_threshold": false
+          },
+          {
+            "fault_type": "divergencia_reservas",
+            "expected_tipo": "DIVERGENCIA_RESERVAS",
+            "detected": false,
+            "t_self_test_ms": null,
+            "within_threshold": false
+          },
+          {
+            "fault_type": "stock_negativo",
+            "expected_tipo": "STOCK_NEGATIVO",
+            "detected": false,
+            "t_self_test_ms": 2.4309169966727495,
+            "within_threshold": true
+          },
+          {
+            "fault_type": "estado_concurrente",
+            "expected_tipo": "ESTADO_CONCURRENTE",
+            "detected": false,
+            "t_self_test_ms": null,
+            "within_threshold": false
+          },
+          {
+            "fault_type": "stock_negativo",
+            "expected_tipo": "STOCK_NEGATIVO",
+            "detected": false,
+            "t_self_test_ms": 3.1020829992485233,
+            "within_threshold": true
+          },
+          {
+            "fault_type": "stock_negativo",
+            "expected_tipo": "STOCK_NEGATIVO",
+            "detected": true,
+            "t_self_test_ms": 2.0522499980870634,
+            "within_threshold": true
+          },
+          {
+            "fault_type": "stock_negativo",
+            "expected_tipo": "STOCK_NEGATIVO",
+            "detected": true,
+            "t_self_test_ms": 3.2122920019901358,
+            "within_threshold": true
+          },
+          {
+            "fault_type": "stock_negativo",
+            "expected_tipo": "STOCK_NEGATIVO",
+            "detected": true,
+            "t_self_test_ms": 2.64620799862314,
+            "within_threshold": true
+          }
+        ]
+      },
+      "detection_rate": 0.3333333333333333,
+      "t_self_test_max_ms": 3.2122920019901358,
+      "t_self_test_avg_ms": 2.687104165185398,
+      "timing_ok": true
     },
     {
       "id": "CP-A3",
-      "name": "Concurrencia detectada",
+      "name": "Estado concurrente detectado",
       "passed": true,
-      "concurrencia_detected": true,
-      "t_self_test_ms": 0.002249999852210749
+      "detected": true,
+      "t_self_test_ms": 0.0015830009942874312
     },
     {
       "id": "CP-A4",
       "name": "Divergencia de reservas",
       "passed": true,
-      "divergencia_detected": true,
-      "t_self_test_ms": 0.00199999976757681
+      "detected": true,
+      "t_self_test_ms": 0.0012920063454657793
     },
     {
       "id": "CP-A5",

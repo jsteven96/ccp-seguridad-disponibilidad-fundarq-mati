@@ -21,3 +21,5 @@ __pycache__/
 # Resultados de experimentos anteriores (opcional — comentar para conservarlos)
 # experiments/*/results_*.json
 # scripts/final_report.json
+
+./claude
